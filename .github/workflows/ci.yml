@@ -1,0 +1,65 @@
+# Builds every preset and runs the tests on pull requests into main and on every push to main.
+# Runs in the box's OS image, so CI builds with the box's compiler. Shared runners give no useful timings.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:26.04
+      # TSan turns ASLR off through personality(), which Docker's default seccomp profile blocks.
+      options: --security-opt seccomp=unconfined
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [release, debug, tsan]
+    steps:
+      - name: Dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates git g++ cmake ninja-build ccache libgtest-dev
+
+      - uses: actions/checkout@v4
+
+      - name: ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ matrix.preset }}-${{ github.sha }}
+          restore-keys: ccache-${{ matrix.preset }}-
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build
+        run: cmake --build build/${{ matrix.preset }}
+
+      # TSan cannot map its shadow memory with ASLR on.
+      - name: Test
+        run: |
+          if [ "${{ matrix.preset }}" = tsan ]; then
+            setarch "$(uname -m)" -R ctest --test-dir build/tsan --output-on-failure
+          else
+            ctest --test-dir build/${{ matrix.preset }} --output-on-failure
+          fi
+
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: clang-format
+        run: |
+          files=$(git ls-files '*.hpp' '*.cpp')
+          [ -z "$files" ] || clang-format --dry-run --Werror $files
