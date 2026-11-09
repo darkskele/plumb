@@ -34,6 +34,13 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     plumb_build_test(plumb_add_bench_stops_odr plumb_selftest_odr "One Definition Rule")
 endif()
 
+# The timed loop in an optimised build: aligned, the op inlined between the stamps, no call there.
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    add_executable(plumb_disasm disasm/marker.cpp)
+    target_link_libraries(plumb_disasm PRIVATE plumb::plumb)
+    add_test(NAME plumb_disasm_batch COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/disasm/check.sh $<TARGET_FILE:plumb_disasm>)
+endif()
+
 # Each compile_fail/*.cpp must fail to compile with the message on its first line, after "// expect: ".
 file(GLOB PLUMB_COMPILE_FAIL CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/*.cpp)
 foreach(src ${PLUMB_COMPILE_FAIL})

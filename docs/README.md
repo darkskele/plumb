@@ -26,7 +26,7 @@ Each step ends with something that builds and runs on WSL and on the box. The re
 - [ ] 3. Timed runner, one process. Done when `spsc_push_int_1024` gives ns per op within the noise of today's gbench figure for the same push.
     - [x] ~~TSC clock, fenced, from cds benchInfra's `tsc.hpp`. TSC frequency.~~
     - [x] ~~Stamp pair cost on the current core: min, max, mean and variance. Recorded, never subtracted.~~
-    - [ ] The batch loop: fixture made opaque, runtime count, op result kept, timed loop aligned.
+    - [x] ~~The batch loop: fixture made opaque, runtime count, op result kept, timed loop aligned.~~
     - [ ] Fixture rebuilt in place between batches, or `reset`.
     - [ ] Warmup by time and count.
     - [ ] Raw sample writer, f64 ns behind a header.

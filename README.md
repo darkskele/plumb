@@ -34,6 +34,7 @@ Assurance
 | No two cases share a name | `plumb_add_bench` runs the binary's `--check` after every build |
 | No two fixture types share a name across bench files | Debug builds link with LTO and `-Werror=odr` |
 | A case breaking a rule of the case API fails to compile with that rule's message | A source per rule that must fail to compile, checked by ctest |
+| The op inlines between the stamps, with no call there, in a 64-byte aligned function | The release build's disassembly of a marker case, checked by ctest |
 
 A claim is made only once its check runs automatically. Progress is in the [docs](docs/README.md) milestones.
 
