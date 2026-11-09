@@ -11,7 +11,6 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
     - [ ] Compile-time checks: name characters, `max_batch` at least one, what the op returns, a `reset` that fits the fixture. Each proven by a source that must fail to compile with its message.
         - [ ] What the op returns, once `plumb::Measured` exists.
 - [ ] 3. Timed runner, one process. Done when `spsc_push_int_1024` gives ns per op within the noise of today's gbench figure for the same push.
-    - [ ] Fixture rebuilt in place between batches, or `reset`.
     - [ ] Warmup by time and count.
     - [ ] Raw sample writer, f64 ns behind a header.
     - [ ] `--run NAME --in-process`. A TSC that is not invariant is warned of and the run carries on.
@@ -62,4 +61,4 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
 
 Code:
 
-- [`include/plumb/batch.hpp:27`](include/plumb/batch.hpp#L27) An op returning `plumb::Measured` takes its own samples.
+- [`include/plumb/batch.hpp:29`](include/plumb/batch.hpp#L29) An op returning `plumb::Measured` takes its own samples.
