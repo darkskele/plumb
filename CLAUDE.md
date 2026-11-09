@@ -7,7 +7,7 @@ A header-only C++26 bench platform for C++ repos, cds, halln and quant-platform 
 - **The timed code is the code a caller runs.** The op inlines into the timed loop. No `std::function`, no virtual call, no compile-time batch count, fixture opaque to the optimiser.
 - **The platform measures and judges, it does not interpret.** Case names are opaque keys. Only equal names are compared.
 - **Void only what cannot be trusted.** Correctness is the tests' job.
-- **Bias is calibrated out. Noise is never subtracted.**
+- **Bias is measured and recorded, never subtracted by the platform. Analysis decides what to remove. Noise is never subtracted.**
 - **A repetition is a process.** Nothing is shared across processes but the binary, the run directory and the arguments.
 - **The binary knows nothing of its environment.** It discovers what it can see and is told nothing else.
 - **No domain types.** The platform knows nothing of queues, sockets or rigs. Those are fixtures.

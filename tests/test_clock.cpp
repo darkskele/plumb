@@ -63,6 +63,21 @@ TEST(Clock, NsKeepsFractionsAndSign) {
     EXPECT_DOUBLE_EQ(clock.ns(-1), -1.0 / clock.ghz());
 }
 
+TEST(Clock, StampCostIsPositiveAndSmall) {
+    auto clock = plumb::TscClock::calibrate(10ms);
+    auto cost  = plumb::TscClock::stamp_cost(10'000);
+    EXPECT_EQ(cost.count(), 10'000u);
+    EXPECT_GT(cost.min(), 0.0);
+    EXPECT_LE(cost.min(), cost.mean());
+    EXPECT_LE(cost.mean(), cost.max());
+    EXPECT_GE(cost.variance(), 0.0);
+    EXPECT_LT(cost.mean() / clock.ghz(), 200.0);
+}
+
 TEST(ClockDeathTest, EmptyWindowStops) {
     EXPECT_DEATH((void)plumb::TscClock::calibrate(0ms), "window");
+}
+
+TEST(ClockDeathTest, NoReadsStops) { 
+    EXPECT_DEATH((void)plumb::TscClock::stamp_cost(0), "reads"); 
 }

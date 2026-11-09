@@ -4,7 +4,10 @@
 #include <x86intrin.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
+
+#include "plumb/summary.hpp"
 
 namespace plumb {
 
@@ -24,6 +27,17 @@ class TscClock {
         auto     ticks = __rdtscp(&aux);
         _mm_lfence();
         return ticks;
+    }
+
+    /// @brief Ticks an empty stamp pair costs, over `reads` back to back pairs.
+    [[nodiscard]] static Summary stamp_cost(std::size_t reads) pre(reads > 0) {
+        Summary cost;
+        for (std::size_t i = 0; i < reads; ++i) {
+            auto a = now();
+            auto b = now();
+            cost.add(static_cast<double>(b - a));
+        }
+        return cost;
     }
 
     /// @brief A clock whose rate is the ticks counted against the steady clock over `window`.

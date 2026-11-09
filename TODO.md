@@ -11,7 +11,6 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
     - [ ] Compile-time checks: name characters, `max_batch` at least one, what the op returns, a `reset` that fits the fixture. Each proven by a source that must fail to compile with its message.
         - [ ] What the op returns, once `plumb::Measured` exists.
 - [ ] 3. Timed runner, one process. Done when `spsc_push_int_1024` gives ns per op within the noise of today's gbench figure for the same push.
-    - [ ] Stamp pair calibration on the current core, subtracted per sample.
     - [ ] The batch loop: fixture made opaque, runtime count, op result kept, timed loop aligned.
     - [ ] Fixture rebuilt in place between batches, or `reset`.
     - [ ] Warmup by time and count.
@@ -27,6 +26,7 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
     - [ ] Aggregate step: every repetition's raw samples into `results.json`, schema version 1.
     - [ ] Per figure: count, exact percentiles, drift windows, log-linear histogram with its layout (from the halln and cds `histogram.hpp`, which are one file).
     - [ ] Run fields: build, plan, calibration, time. Repetition fields: batch, time, environment, void.
+    - [ ] The stamp cost as the first result of every run.
     - [ ] `--aa`: both arms per round, and the run's own floor per cell.
 - [ ] 6. cds, the first consumer. Done when every cds bench has a plumb case and its results sit beside the gbench figures they replace.
     - [ ] plumb as `extern/plumb` in cds. `benchmarks/**/bench_*.cpp` globbed into `cds_plumb`.
@@ -41,6 +41,7 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
     - [ ] In `plumb/tools/`, Python. Reads `results.json` and devenv's `env.json`.
     - [ ] Floor between runs, from halln's `noise.py`: each run's own floor and two runs of one build, the larger.
     - [ ] A/B diff, from halln's `diff.py`: past the floor, outside both runs' spread, confirmed by a rerun. Refused when the identities differ. cds's suite-shift correction only for runs with no floor.
+    - [ ] Stamp cost removal, an option, from the run's recorded stamp cost.
     - [ ] Markdown and plots, from halln's `to_md.py` and `plots.py` and cds's `bench_to_md.py`.
 - [ ] 9. Measured shape and halln. Done when the halln cases reproduce the sweep's figures within its noise floor.
     - [ ] `plumb::Measured`, the `wall` figure beside it, each op of a batch its own sample.

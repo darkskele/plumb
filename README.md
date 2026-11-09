@@ -17,7 +17,8 @@ Measurement
 
 Judgement
 - A measurement that cannot be trusted is void, with a reason. Code correctness is the tests' job, not plumb's.
-- Bias is calibrated out. Noise is reduced, excluded or sized, never subtracted.
+- Bias is measured and recorded beside the figures, never subtracted from them. Analysis decides what to remove.
+- Noise is reduced, excluded or sized, never subtracted.
 - Two runs are compared only by equal case names, under equal environments, past the noise floor.
 
 Ease of use
