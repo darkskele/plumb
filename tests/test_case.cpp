@@ -69,3 +69,35 @@ TEST(Case, MaxBatchDefaultsToOne) {
     ASSERT_NE(e, nullptr);
     EXPECT_EQ(e->max_batch, 1u);
 }
+
+namespace {
+
+struct Tracked {
+    static inline int built     = 0;
+    static inline int destroyed = 0;
+
+    int value = 0;
+
+    Tracked() { ++built; }
+
+    ~Tracked() { ++destroyed; }
+};
+
+}  // namespace
+
+TEST(Reset, DefaultRebuildsInPlace) {
+    Tracked f;
+    f.value       = 5;
+    int built     = Tracked::built;
+    int destroyed = Tracked::destroyed;
+    plumb::Reset<Tracked>{}.fn(f);
+    EXPECT_EQ(f.value, 0);
+    EXPECT_EQ(Tracked::built, built + 1);
+    EXPECT_EQ(Tracked::destroyed, destroyed + 1);
+}
+
+TEST(Reset, KeepLeavesTheFixture) {
+    Push f{.count = 5};
+    plumb::Reset<Push>{plumb::keep}.fn(f);
+    EXPECT_EQ(f.count, 5);
+}

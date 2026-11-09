@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <memory>
 #include <meta>
 #include <string>
 #include <string_view>
@@ -36,11 +37,18 @@ consteval std::string about(std::string_view what, std::meta::info type) {
 
 }  // namespace detail
 
-/// @brief What replaces rebuilding the fixture between batches. Empty means rebuild.
+/// @brief A reset that destroys the fixture and builds a new one in the same memory.
+template <class F>
+void rebuild(F& f) {
+    std::destroy_at(&f);
+    std::construct_at(&f);
+}
+
+/// @brief How the fixture is made ready between batches. Rebuilt unless a reset is given.
 /// @tparam F The fixture type.
 template <class F>
 struct Reset {
-    void (*fn)(F&) = nullptr;
+    void (*fn)(F&) = &rebuild<F>;
 
     constexpr Reset() = default;
 

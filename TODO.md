@@ -58,3 +58,9 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
     - [ ] Baselines and the ledger. Whether runs gate a change.
     - [ ] A container environment. Intel PT and static analysis (uiCA, llvm-mca).
     - [ ] A canary case.
+
+## include/plumb
+
+Code:
+
+- [`include/plumb/batch.hpp:27`](include/plumb/batch.hpp#L27) An op returning `plumb::Measured` takes its own samples.
