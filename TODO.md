@@ -11,13 +11,12 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
     - [ ] Compile-time checks: name characters, `max_batch` at least one, what the op returns, a `reset` that fits the fixture. Each proven by a source that must fail to compile with its message.
         - [ ] What the op returns, once `plumb::Measured` exists.
 - [ ] 3. Timed runner, one process. Done when `spsc_push_int_1024` gives ns per op within the noise of today's gbench figure for the same push.
-    - [ ] TSC clock, fenced, from cds benchInfra's `tsc.hpp`. TSC frequency.
     - [ ] Stamp pair calibration on the current core, subtracted per sample.
     - [ ] The batch loop: fixture made opaque, runtime count, op result kept, timed loop aligned.
     - [ ] Fixture rebuilt in place between batches, or `reset`.
     - [ ] Warmup by time and count.
     - [ ] Raw sample writer, f64 ns behind a header.
-    - [ ] `--run NAME --in-process`.
+    - [ ] `--run NAME --in-process`. A TSC that is not invariant is warned of and the run carries on.
 - [ ] 4. Parent and plan. Done when a full run of two cases leaves one raw file per repetition and survives a case that crashes.
     - [ ] Calibration child per case: batch size against the target time, sample count against the time cap.
     - [ ] Rounds in an order shuffled by a recorded seed. A child per repetition, the binary re-executing itself.

@@ -24,13 +24,13 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~`plumb::main` with `--list` and `--check`.~~
     - [x] ~~`plumb_add_bench`. A duplicate name fails the build. Debug builds link with LTO, so two types sharing a name across files fail the link.~~
 - [ ] 3. Timed runner, one process. Done when `spsc_push_int_1024` gives ns per op within the noise of today's gbench figure for the same push.
-    - [ ] TSC clock, fenced, from cds benchInfra's `tsc.hpp`. TSC frequency.
+    - [x] ~~TSC clock, fenced, from cds benchInfra's `tsc.hpp`. TSC frequency.~~
     - [ ] Stamp pair calibration on the current core, subtracted per sample.
     - [ ] The batch loop: fixture made opaque, runtime count, op result kept, timed loop aligned.
     - [ ] Fixture rebuilt in place between batches, or `reset`.
     - [ ] Warmup by time and count.
     - [ ] Raw sample writer, f64 ns behind a header.
-    - [ ] `--run NAME --in-process`.
+    - [ ] `--run NAME --in-process`. A TSC that is not invariant is warned of and the run carries on.
 - [ ] 4. Parent and plan. Done when a full run of two cases leaves one raw file per repetition and survives a case that crashes.
     - [ ] Calibration child per case: batch size against the target time, sample count against the time cap.
     - [ ] Rounds in an order shuffled by a recorded seed. A child per repetition, the binary re-executing itself.
