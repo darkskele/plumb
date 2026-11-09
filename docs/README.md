@@ -28,7 +28,7 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~Stamp pair cost on the current core: min, max, mean and variance. Recorded, never subtracted.~~
     - [x] ~~The batch loop: fixture made opaque, runtime count, op result kept, timed loop aligned.~~
     - [x] ~~Fixture rebuilt in place between batches, or `reset`.~~
-    - [ ] Warmup by time and count.
+    - [x] ~~Warmup by time and count.~~
     - [ ] Raw sample writer, f64 ns behind a header.
     - [ ] `--run NAME --in-process`. A TSC that is not invariant is warned of and the run carries on.
 - [ ] 4. Parent and plan. Done when a full run of two cases leaves one raw file per repetition and survives a case that crashes.

@@ -1,9 +1,12 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 
 #include "plumb/batch.hpp"
+
+using namespace std::chrono_literals;
 
 namespace {
 
@@ -51,6 +54,7 @@ struct Tracked {
     static inline int         destroyed = 0;
     static inline const void* last      = nullptr;
     static inline bool        moved     = false;
+    static inline std::size_t ops       = 0;
 
     std::size_t calls = 0;
 
@@ -58,23 +62,26 @@ struct Tracked {
 
     ~Tracked() { ++destroyed; }
 
-    static void start() { built = destroyed = 0, last = nullptr, moved = false; }
+    static void start() { built = destroyed = 0, last = nullptr, moved = false, ops = 0; }
 };
 
 constexpr auto tracked_op = [](Tracked& t) {
     if (Tracked::last && Tracked::last != &t) Tracked::moved = true;
     Tracked::last = &t;
     ++t.calls;
+    ++Tracked::ops;
 };
 
 using TrackedOp = decltype(tracked_op);
 
 int resets = 0;
 
+constexpr plumb::detail::Warmup no_warmup{.time = {}, .batches = 0};
+
 }  // namespace
 
 TEST(Batches, RunsCountBatchesOfN) {
-    auto b = plumb::detail::run_batches<Counter, CountOp>(plumb::keep, 10, 5);
+    auto b = plumb::detail::run_batches<Counter, CountOp>(plumb::keep, 10, 5, no_warmup);
     EXPECT_EQ(b.n, 10u);
     ASSERT_EQ(b.ticks.size(), 5u);
     for (auto t : b.ticks) EXPECT_GT(t, 0u);
@@ -82,7 +89,7 @@ TEST(Batches, RunsCountBatchesOfN) {
 
 TEST(Batches, DefaultResetRebuildsBetweenBatches) {
     Tracked::start();
-    (void)plumb::detail::run_batches<Tracked, TrackedOp>({}, 3, 4);
+    (void)plumb::detail::run_batches<Tracked, TrackedOp>({}, 3, 4, no_warmup);
     EXPECT_EQ(Tracked::built, 4);
     EXPECT_EQ(Tracked::destroyed, 4);
     EXPECT_FALSE(Tracked::moved);
@@ -96,10 +103,38 @@ TEST(Batches, ResetRunsBetweenBatchesOnly) {
             EXPECT_EQ(t.calls % 3, 0u);
             ++resets;
         },
-        3, 4);
+        3, 4, no_warmup);
     EXPECT_EQ(resets, 3);
     EXPECT_EQ(Tracked::built, 1);
     EXPECT_EQ(Tracked::destroyed, 1);
+}
+
+TEST(Batches, WarmupRunsItsBatchesUncounted) {
+    Tracked::start();
+    auto b = plumb::detail::run_batches<Tracked, TrackedOp>(plumb::keep, 3, 2,
+                                                            {.time = {}, .batches = 5});
+    EXPECT_EQ(b.ticks.size(), 2u);
+    EXPECT_EQ(Tracked::ops, (5u + 2u) * 3u);
+}
+
+TEST(Batches, WarmupRunsForItsTime) {
+    auto start = std::chrono::steady_clock::now();
+    (void)plumb::detail::run_batches<Counter, CountOp>(plumb::keep, 1, 1,
+                                                       {.time = 50ms, .batches = 0});
+    EXPECT_GE(std::chrono::steady_clock::now() - start, 50ms);
+}
+
+TEST(Batches, ResetBetweenEveryTwoBatchesWarmupIncluded) {
+    resets = 0;
+    (void)plumb::detail::run_batches<Tracked, TrackedOp>([](Tracked&) { ++resets; }, 3, 3,
+                                                         {.time = {}, .batches = 2});
+    EXPECT_EQ(resets, 2 + 3 - 1);
+}
+
+TEST(Batches, RecordsTheStampCost) {
+    auto b = plumb::detail::run_batches<Counter, CountOp>(plumb::keep, 1, 1, no_warmup);
+    EXPECT_GT(b.stamp_cost.count(), 1u);
+    EXPECT_GT(b.stamp_cost.min(), 0.0);
 }
 
 TEST(BatchesDeathTest, EmptyBatchStops) {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
@@ -7,6 +8,7 @@
 
 #include "plumb/case.hpp"
 #include "plumb/clock.hpp"
+#include "plumb/summary.hpp"
 
 namespace plumb::detail {
 
@@ -43,25 +45,45 @@ template <Fixture F, Op<F> O>
     return t1 - t0;
 }
 
-/// @brief One repetition's raw samples, the ticks of each batch of `n` ops.
+/// @brief Batches run before the counted ones, until both the time and the count have passed.
+struct Warmup {
+    std::chrono::nanoseconds time    = std::chrono::milliseconds{100};
+    std::size_t              batches = 10;
+};
+
+/// @brief One repetition's raw record. The ticks of each batch of `n` ops, and the stamp cost.
 struct Batches {
     std::size_t                n;
+    Summary                    stamp_cost;
     std::vector<std::uint64_t> ticks;
 };
 
-/// @brief `count` batches of `n` ops on one fixture, reset before every batch but the first.
+/// @brief Reads per stamp cost measurement.
+inline constexpr std::size_t stamp_reads = 10'000;
+
+/// @brief Warmup, the stamp cost, then `count` batches of `n` ops, all on one fixture.
+/// The fixture is reset before every batch but the first.
 /// @tparam F The fixture type.
 /// @tparam O The op type.
 template <Fixture F, Op<F> O>
-Batches run_batches(Reset<F> reset, std::size_t n, std::size_t count) noexcept pre(n > 0)
-    pre(count > 0) {
-    Batches out{.n = n, .ticks = {}};
+Batches run_batches(Reset<F> reset, std::size_t n, std::size_t count, Warmup warmup = {}) noexcept
+    pre(n > 0) pre(count > 0) {
+    F    fixture{};
+    bool first = true;
+    auto batch = [&] {
+        if (!first) reset.fn(fixture);
+        first = false;
+        return run_batch<F, O>(fixture, n);
+    };
+
+    using steady = std::chrono::steady_clock;
+    auto start   = steady::now();
+    for (std::size_t done = 0; done < warmup.batches || steady::now() - start < warmup.time; ++done)
+        (void)batch();
+
+    Batches out{.n = n, .stamp_cost = TscClock::stamp_cost(stamp_reads), .ticks = {}};
     out.ticks.reserve(count);
-    F fixture{};
-    for (std::size_t i = 0; i < count; ++i) {
-        if (i > 0) reset.fn(fixture);
-        out.ticks.push_back(run_batch<F, O>(fixture, n));
-    }
+    for (std::size_t i = 0; i < count; ++i) out.ticks.push_back(batch());
     return out;
 }
 
