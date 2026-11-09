@@ -15,7 +15,7 @@ A header-only C++26 bench platform for C++ repos, cds, halln and quant-platform 
 - **Seams first, generality later.** Build concretely; abstract on the second implementation.
 
 ## Toolchain
-C++26, CMake + Ninja, `CMakePresets.json` (`release`/`debug`/`tsan`), GoogleTest from apt. Header-only `INTERFACE` targets: `plumb::plumb` for the headers, `plumb::main` for the bench binary's `main`. WSL's GCC 13 cannot build C++26, so builds and tests run on the build box through `boxrun`.
+C++26, CMake + Ninja, `CMakePresets.json` (`release`/`debug`/`tsan`), GoogleTest from apt. Header-only `INTERFACE` targets: `plumb::plumb` for the headers, `plumb::main` for the bench binary's `main`. GCC 16 (`g++-16`, set by the presets, CMake refuses older). Use C++26 wherever it removes code or proves more: reflection, contracts, `consteval` checks, `std::print`, `std::expected`. WSL's GCC 13 cannot build it, so builds and tests run on the build box through `boxrun`.
 
 ## Docs and comments
 Follow the `writing` skill for every comment and doc. In short: terse, self-contained, single-source; `docs/` mirrors `include/plumb/` with a `README.md` + `DECISIONS.md` per module; module-local decision numbering; no em dashes. Run `clang-format -i` on every `.cpp`/`.hpp` created or edited (never on `CMakeLists.txt`). Goals live as `## Milestones` checklists in the `docs/` READMEs. `TODO.md` is generated from them and the code `@todo`s by the pre-commit hook, so never edit it by hand.

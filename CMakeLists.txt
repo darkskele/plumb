@@ -8,6 +8,11 @@ if(PROJECT_IS_TOP_LEVEL)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(CMAKE_CXX_EXTENSIONS OFF)
 
+    # Reflection, contracts and the C++26 library need GCC 16.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
+        message(FATAL_ERROR "plumb needs GCC 16 or newer, found ${CMAKE_CXX_COMPILER_VERSION}")
+    endif()
+
     # Feeds .vscode/c_cpp_properties.json.
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -26,12 +31,16 @@ add_library(plumb INTERFACE)
 add_library(plumb::plumb ALIAS plumb)
 target_include_directories(plumb INTERFACE ${PROJECT_SOURCE_DIR}/include)
 target_compile_features(plumb INTERFACE cxx_std_26)
+target_compile_options(plumb INTERFACE -freflection -fcontracts)
+target_link_libraries(plumb INTERFACE stdc++exp)
 
 # The bench binary's main, compiled into the consumer's executable.
 add_library(plumb_main INTERFACE)
 add_library(plumb::main ALIAS plumb_main)
 target_sources(plumb_main INTERFACE ${PROJECT_SOURCE_DIR}/src/main.cpp)
 target_link_libraries(plumb_main INTERFACE plumb::plumb)
+
+include(${PROJECT_SOURCE_DIR}/cmake/plumb_bench.cmake)
 
 if(NOT PROJECT_IS_TOP_LEVEL)
     return()
@@ -41,11 +50,5 @@ include(CTest)                                  # BUILD_TESTING, default ON
 
 if(BUILD_TESTING)
     find_package(GTest CONFIG REQUIRED)
-    # Every test_*.cpp under tests/. CONFIGURE_DEPENDS re-globs at build
-    # time, so a new file needs no edit here.
-    file(GLOB_RECURSE PLUMB_TEST_SRCS CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/tests/test_*.cpp)
-    add_executable(plumb_tests ${PLUMB_TEST_SRCS})
-    target_compile_options(plumb_tests PRIVATE -Wall -Wextra)
-    target_link_libraries(plumb_tests PRIVATE plumb::plumb GTest::gtest GTest::gtest_main)
-    add_test(NAME plumb_tests COMMAND plumb_tests)
+    add_subdirectory(tests)
 endif()

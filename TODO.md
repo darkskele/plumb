@@ -8,10 +8,8 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
     - [ ] halln `feature/rigStability` lands as it is. Its `diff.py` and `noise.py` are the reference for step 8.
     - [ ] cds `feature/benchInfra` does not land its `benchmarks/support` headers (`tsc.hpp`, `pin.hpp`, `histogram.hpp`, `build_info.hpp`) or the latency harness in cds. They seed plumb in steps 3 to 5. Its `tools/bench` changes may land, they are retired in step 10.
 - [ ] 2. Registry and case API. Done when cases in two files list together and a duplicate stops the binary.
-    - [ ] `plumb::Case`, `plumb::op<Fixture>(name, op, Options)`, `Options{max_batch, reset}`.
-    - [ ] Compile-time checks: name characters, `max_batch` at least one, what the op returns, a `reset` that fits the fixture. Each proven by a `requires` that must fail.
-    - [ ] Registry as a function-local static in an inline function. Duplicate names refused at startup.
-    - [ ] `plumb::main` with `--list`.
+    - [ ] Compile-time checks: name characters, `max_batch` at least one, what the op returns, a `reset` that fits the fixture. Each proven by a source that must fail to compile with its message.
+        - [ ] What the op returns, once `plumb::Measured` exists.
 - [ ] 3. Timed runner, one process. Done when `spsc_push_int_1024` gives ns per op within the noise of today's gbench figure for the same push.
     - [ ] TSC clock, fenced, from cds benchInfra's `tsc.hpp`. TSC frequency.
     - [ ] Stamp pair calibration on the current core, subtracted per sample.
@@ -60,9 +58,3 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
     - [ ] Baselines and the ledger. Whether runs gate a change.
     - [ ] A container environment. Intel PT and static analysis (uiCA, llvm-mca).
     - [ ] A canary case.
-
-## src
-
-Code:
-
-- [`src/main.cpp:3`](src/main.cpp#L3) Parse `--list` and `--run NAME`, then run the plan.
