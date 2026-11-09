@@ -16,10 +16,13 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~`CLAUDE.md`, `README.md`, `docs/` with the milestones.~~
     - [x] ~~devenv: `vscode/plumb/` tasks and launches, `wt adopt`, the pre-commit hook.~~
 - [ ] 2. Registry and case API. Done when cases in two files list together and a duplicate stops the binary.
-    - [ ] `plumb::Case`, `plumb::op<Fixture>(name, op, Options)`, `Options{max_batch, reset}`.
-    - [ ] Compile-time checks: name characters, `max_batch` at least one, what the op returns, a `reset` that fits the fixture. Each proven by a `requires` that must fail.
-    - [ ] Registry as a function-local static in an inline function. Duplicate names refused at startup.
-    - [ ] `plumb::main` with `--list`.
+    - [x] ~~`plumb::Case`, `plumb::op<Fixture>(name, op, Options)`, `Options{max_batch, reset}`.~~
+    - [ ] Compile-time checks: name characters, `max_batch` at least one, what the op returns, a `reset` that fits the fixture. Each proven by a source that must fail to compile with its message.
+        - [x] ~~Name characters, `max_batch` at least one, a `reset` that fits the fixture, a fixture built with no arguments and destroyed without throwing, an op with no captures that takes the fixture.~~
+        - [ ] What the op returns, once `plumb::Measured` exists.
+    - [x] ~~Registry as a function-local static in an inline function. Duplicate names refused at startup.~~
+    - [x] ~~`plumb::main` with `--list` and `--check`.~~
+    - [x] ~~`plumb_add_bench`. A duplicate name fails the build. Debug builds link with LTO, so two types sharing a name across files fail the link.~~
 - [ ] 3. Timed runner, one process. Done when `spsc_push_int_1024` gives ns per op within the noise of today's gbench figure for the same push.
     - [ ] TSC clock, fenced, from cds benchInfra's `tsc.hpp`. TSC frequency.
     - [ ] Stamp pair calibration on the current core, subtracted per sample.

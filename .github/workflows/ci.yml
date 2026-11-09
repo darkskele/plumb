@@ -1,5 +1,5 @@
 # Builds every preset and runs the tests on pull requests into main and on every push to main.
-# Runs in the box's OS image, so CI builds with the box's compiler. Shared runners give no useful timings.
+# Runs in the box's OS image with the box's GCC 16. Shared runners give no useful timings.
 name: ci
 
 on:
@@ -28,7 +28,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates git g++ cmake ninja-build ccache libgtest-dev
+            ca-certificates git g++-16 cmake ninja-build ccache libgtest-dev
 
       - uses: actions/checkout@v4
 

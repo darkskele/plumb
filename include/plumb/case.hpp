@@ -1,0 +1,93 @@
+#pragma once
+
+#include <concepts>
+#include <meta>
+#include <string>
+#include <string_view>
+#include <type_traits>
+
+#include "plumb/name.hpp"
+#include "plumb/registry.hpp"
+
+namespace plumb {
+
+/// @brief What a case measures around. Built with no arguments, destroyed without throwing.
+template <class F>
+concept Fixture = std::is_object_v<F> && !std::is_const_v<F> && std::default_initializable<F> &&
+                  std::is_nothrow_destructible_v<F>;
+
+/// @brief What a case measures. A lambda with no captures, called with the fixture.
+template <class O, class F>
+concept Op = Fixture<F> && std::is_empty_v<O> && std::default_initializable<O> &&
+             std::invocable<const O&, F&>;
+
+/// @brief A reset that leaves the fixture as the last batch left it.
+inline constexpr auto keep = [](Fixture auto&) noexcept {};
+
+class Case;
+
+namespace detail {
+
+Case make_case(Entry e);
+
+consteval std::string about(std::string_view what, std::meta::info type) {
+    return std::string(what) + std::string(std::meta::display_string_of(type));
+}
+
+}  // namespace detail
+
+/// @brief What replaces rebuilding the fixture between batches. Empty means rebuild.
+/// @tparam F The fixture type.
+template <class F>
+struct Reset {
+    void (*fn)(F&) = nullptr;
+
+    constexpr Reset() = default;
+
+    template <class R>
+    constexpr Reset(R r) {
+        static_assert(
+            std::convertible_to<R, void (*)(F&)>,
+            detail::about("reset must be a lambda with no captures taking the fixture: ", ^^F));
+        if constexpr (std::convertible_to<R, void (*)(F&)>) fn = r;
+    }
+};
+
+/// @brief A case's options beside its fixture and op.
+/// @tparam F The fixture type.
+template <class F>
+struct Options {
+    MaxBatch max_batch = 1;
+    Reset<F> reset     = {};
+};
+
+/// @brief A registered case. Declared once as a const variable at namespace scope.
+class Case {
+   public:
+    Case(const Case&) = delete("a case registers once, declare it as one const variable");
+    Case& operator=(const Case&) =
+        delete("a case registers once, declare it as one const variable");
+
+   private:
+    explicit Case(Entry e) { registry().add(e); }
+
+    friend Case detail::make_case(Entry e);
+};
+
+inline Case detail::make_case(Entry e) { return Case(e); }
+
+/// @brief Registers a case that calls `o` on a fixture of type `F`.
+template <class F, class O>
+Case op(Name name, O, Options<F> opts = {}) {
+    static_assert(std::default_initializable<F>,
+                  detail::about("fixture must be default constructible: ", ^^F));
+    static_assert(std::is_nothrow_destructible_v<F>,
+                  detail::about("fixture destructor may throw: ", ^^F));
+    static_assert(std::is_empty_v<O> && std::default_initializable<O>,
+                  "op must be a lambda with no captures");
+    static_assert(std::invocable<const O&, F&>,
+                  detail::about("op must be callable with the fixture: ", ^^F));
+    return detail::make_case({.name = name.value, .max_batch = opts.max_batch.value});
+}
+
+}  // namespace plumb

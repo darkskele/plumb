@@ -30,12 +30,15 @@ Assurance
 |---|---|
 | No undefined behavior in the platform | ASan and UBSan preset |
 | No data races in the platform | TSan preset |
+| No two cases share a name | `plumb_add_bench` runs the binary's `--check` after every build |
+| No two fixture types share a name across bench files | Debug builds link with LTO and `-Werror=odr` |
+| A case breaking a rule of the case API fails to compile with that rule's message | A source per rule that must fail to compile, checked by ctest |
 
 A claim is made only once its check runs automatically. Progress is in the [docs](docs/README.md) milestones.
 
 ## Build
 
-Toolchain. GCC 15 or newer for C++26, CMake 3.25 or newer, Ninja, GoogleTest from apt.
+Toolchain. GCC 16 for C++26 (`g++-16`, picked by the presets), CMake 3.25 or newer, Ninja, GoogleTest from apt.
 
 ```bash
 cmake --preset release
@@ -46,7 +49,7 @@ cmake --build --preset release
 ```
 
 ```bash
-./build/release/plumb_tests
+ctest --test-dir build/release --output-on-failure
 ```
 
 - Presets. `release`, `debug` (ASan and UBSan), `tsan`.
@@ -59,8 +62,8 @@ cmake --build --preset release
 if(NOT TARGET plumb::plumb)
     add_subdirectory(extern/plumb)
 endif()
-add_executable(my_plumb ${MY_BENCH_SRCS})
-target_link_libraries(my_plumb PRIVATE plumb::main)
+file(GLOB_RECURSE MY_BENCH_SRCS CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/benchmarks/bench_*.cpp)
+plumb_add_bench(my_plumb ${MY_BENCH_SRCS})
 ```
 
-Headers are included as `"plumb/plumb.hpp"`. `plumb::main` brings the binary's `main` and the headers. Tests build only when plumb is the top-level project.
+Headers are included as `"plumb/plumb.hpp"`. `plumb_add_bench` makes one bench binary with plumb's `main`, and fails the build when two cases share a name. Tests build only when plumb is the top-level project.

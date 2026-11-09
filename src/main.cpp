@@ -1,4 +1,3 @@
-#include "plumb/plumb.hpp"
+#include "plumb/cli.hpp"
 
-/// @todo Parse `--list` and `--run NAME`, then run the plan.
-int main() { return 0; }
+int main(int argc, char** argv) { return plumb::main(argc, argv); }
