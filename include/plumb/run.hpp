@@ -29,7 +29,7 @@ namespace detail {
 inline constexpr double      batch_target_ns = 5'000;
 inline constexpr double      run_target_ns   = 1e9;
 inline constexpr std::size_t min_count       = 10;
-inline constexpr std::size_t max_count       = 100'000;
+inline constexpr std::size_t max_count       = 1'000'000;
 
 /// @brief Batches that fill the run's target time, at `batch_ns` each.
 inline std::size_t count_for(double batch_ns) pre(batch_ns > 0) {

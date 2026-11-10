@@ -30,7 +30,7 @@ TEST(Run, CountFillsTheRunTime) { EXPECT_EQ(plumb::detail::count_for(1e6), 1000u
 
 TEST(Run, CountHasAFloorAndACap) {
     EXPECT_EQ(plumb::detail::count_for(1e8), plumb::detail::min_count);
-    EXPECT_EQ(plumb::detail::count_for(1e3), plumb::detail::max_count);
+    EXPECT_EQ(plumb::detail::count_for(1e2), plumb::detail::max_count);
 }
 
 TEST(Run, FastOpGrowsToMaxBatchExactly) {

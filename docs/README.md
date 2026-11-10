@@ -35,6 +35,7 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [ ] `plumb::Measured`, TSC ticks the op took from plumb's clock.
     - [ ] Each op of a batch its own sample. The `wall` figure beside it.
 - [ ] 5. Parent and plan. Done when a full run of two cases leaves one raw file per repetition and survives a case that crashes.
+    - [ ] The TSC rate measured once by the parent, given to every child.
     - [ ] Calibration child per case: batch size against the target time, sample count against the time cap.
     - [ ] Rounds in an order shuffled by a recorded seed. A child per repetition, the binary re-executing itself.
     - [ ] Void and rerun: a child that crashed or exited nonzero, `plumb::abandon`, op too close to the stamp's cost.
@@ -43,8 +44,9 @@ Each step ends with something that builds and runs on WSL and on the box. The re
 - [ ] 6. A/A. Done when an `--aa` run leaves both arms' raw files for every round.
     - [ ] `--aa`: two arms of the same build per round, each repetition its own process.
 - [ ] 7. Results. Done when two runs of the same build give binary results files, and console tables a person can compare by eye.
-    - [ ] Aggregate step: every repetition's raw samples into one binary results file per run, schema version 1.
-    - [ ] Per figure: count, exact percentiles, drift windows, log-linear histogram with its layout (from the halln and cds `histogram.hpp`, which are one file).
+    - [ ] One binary results file per run, schema version 1. Figures and histograms, no samples.
+    - [ ] Each repetition folded in as it ends: its own min, p50, p90, p99 and max exact from its samples, its samples into the case's histogram, its raw file deleted unless `--keep-raw`.
+    - [ ] Per case: count, min, p50, p90, p99 and max from the histogram, drift windows, log-linear histogram with its layout (from the halln and cds `histogram.hpp`, which are one file).
     - [ ] Run fields: build, plan, calibration, time. Repetition fields: batch, time, environment, void.
     - [ ] The stamp cost as the first result of every run.
     - [ ] A summary table on the console.
