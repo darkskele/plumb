@@ -78,6 +78,4 @@ TEST(ClockDeathTest, EmptyWindowStops) {
     EXPECT_DEATH((void)plumb::TscClock::calibrate(0ms), "window");
 }
 
-TEST(ClockDeathTest, NoReadsStops) { 
-    EXPECT_DEATH((void)plumb::TscClock::stamp_cost(0), "reads"); 
-}
+TEST(ClockDeathTest, NoReadsStops) { EXPECT_DEATH((void)plumb::TscClock::stamp_cost(0), "reads"); }
