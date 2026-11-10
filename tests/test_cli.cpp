@@ -6,6 +6,7 @@
 #include <expected>
 #include <filesystem>
 #include <format>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -174,7 +175,7 @@ std::filesystem::path fresh_dir(std::string_view name) {
 
 TEST(Cli, RunsEveryCaseIntoOneTable) {
     auto dir = fresh_dir("plumb_cli_all");
-    auto c   = run(counters(), {"--out", dir.string()});
+    auto c   = run(counters(), {"--in-process", "--out", dir.string()});
     ASSERT_EQ(c.code, 0) << c.err;
     EXPECT_NE(c.out.find("ns per op"), std::string::npos) << c.out;
     EXPECT_EQ(c.out.find('\x1b'), std::string::npos) << c.out;
@@ -198,7 +199,7 @@ TEST(Cli, RunsEveryCaseIntoOneTable) {
 
 TEST(Cli, RunOneCase) {
     auto dir = fresh_dir("plumb_cli_one");
-    auto c   = run(counters(), {"--run", "count_b", "--out", dir.string()});
+    auto c   = run(counters(), {"--in-process", "--run", "count_b", "--out", dir.string()});
     ASSERT_EQ(c.code, 0) << c.err;
     EXPECT_NE(c.out.find("\ncount_b "), std::string::npos) << c.out;
     EXPECT_EQ(c.out.find("count_a"), std::string::npos) << c.out;
@@ -210,56 +211,85 @@ TEST(Cli, RunReportsADirectoryItCannotMake) {
     auto       file = fresh_dir("plumb_cli_file");
     std::FILE* f    = std::fopen(file.c_str(), "w");
     std::fclose(f);
-    auto c = run(counters(), {"--out", (file / "sub").string()});
+    auto c = run(counters(), {"--in-process", "--out", (file / "sub").string()});
     EXPECT_EQ(c.code, 1);
     EXPECT_EQ(c.out, "");
     EXPECT_NE(c.err.find("cannot make"), std::string::npos) << c.err;
 }
 
 TEST(Cli, ParsesChild) {
-    auto c =
-        parse({"--child", "push_a", "--n", "8", "--count", "100", "--out", "runs/a/push_a.0.raw"});
+    auto c = parse({"--child", "push_a", "--n", "8", "--count", "100", "--ghz", "2.5", "--out",
+                    "runs/a/push_a.0.raw"});
     ASSERT_TRUE(c) << c.error();
     EXPECT_EQ(*c, (plumb::Command{.kind  = Kind::child,
                                   .name  = "push_a",
                                   .out   = "runs/a/push_a.0.raw",
                                   .n     = 8,
-                                  .count = 100}));
+                                  .count = 100,
+                                  .ghz   = 2.5}));
 }
 
-TEST(Cli, ChildNeedsItsPlanAndFile) {
-    expect_refused({"--child", "a", "--count", "1", "--out", "f"},
-                   "--child needs --n, --count and --out");
-    expect_refused({"--child", "a", "--n", "1", "--out", "f"},
-                   "--child needs --n, --count and --out");
-    expect_refused({"--child", "a", "--n", "1", "--count", "1"},
-                   "--child needs --n, --count and --out");
+TEST(Cli, ChildNeedsItsPlanRateAndFile) {
+    constexpr std::string_view why = "--child needs --n, --count, --ghz and --out";
+    expect_refused({"--child", "a", "--count", "1", "--ghz", "1", "--out", "f"}, why);
+    expect_refused({"--child", "a", "--n", "1", "--ghz", "1", "--out", "f"}, why);
+    expect_refused({"--child", "a", "--n", "1", "--count", "1", "--out", "f"}, why);
+    expect_refused({"--child", "a", "--n", "1", "--count", "1", "--ghz", "1"}, why);
     expect_refused({"--child"}, "--child needs a case name");
 }
 
 TEST(Cli, ChildCountsAreWholeAndAboveZero) {
     for (std::string_view bad : {"0", "-1", "x", "8x", ""}) {
-        auto c = parse({"--child", "a", "--n", bad, "--count", "1", "--out", "f"});
+        auto c = parse({"--child", "a", "--n", bad, "--count", "1", "--ghz", "1", "--out", "f"});
         ASSERT_FALSE(c) << bad;
         EXPECT_NE(c.error().find("--n needs a whole number above zero"), std::string::npos)
             << c.error();
     }
-    expect_refused({"--child", "a", "--n", "1", "--count", "0", "--out", "f"},
+    expect_refused({"--child", "a", "--n", "1", "--count", "0", "--ghz", "1", "--out", "f"},
                    "--count needs a whole number above zero");
+}
+
+TEST(Cli, RateIsFiniteAndAboveZero) {
+    for (std::string_view bad : {"0", "-1", "x", "inf", "nan", "2.5x", ""}) {
+        auto c = parse({"--calibrate", "a", "--ghz", bad, "--out", "f"});
+        ASSERT_FALSE(c) << bad;
+        EXPECT_NE(c.error().find("--ghz needs a rate above zero"), std::string::npos) << c.error();
+    }
 }
 
 TEST(Cli, PlanOnlyWithChild) {
     expect_refused({"--n", "8"}, "--n and --count go only with --child");
     expect_refused({"--run", "a", "--count", "8"}, "--n and --count go only with --child");
-    expect_refused({"--child", "a", "--run", "a", "--n", "1", "--count", "1", "--out", "f"},
-                   "only with a run");
+    expect_refused(
+        {"--child", "a", "--run", "a", "--n", "1", "--count", "1", "--ghz", "1", "--out", "f"},
+        "only with a run");
     expect_refused({"--child", "a", "--list"}, "one command at a time");
 }
 
-TEST(Cli, ChildRunsOneRepetitionSilently) {
+TEST(Cli, RateOnlyForChildren) {
+    expect_refused({"--ghz", "2.5"}, "--ghz goes only with --child or --calibrate");
+    expect_refused({"--list", "--ghz", "2.5"}, "--ghz goes only with --child or --calibrate");
+}
+
+TEST(Cli, ParsesSeed) {
+    auto c = parse({"--seed", "18446744073709551615"});
+    ASSERT_TRUE(c) << c.error();
+    EXPECT_EQ(c->seed, 18446744073709551615u);
+    EXPECT_EQ(parse({"--seed", "0"})->seed, 0u);
+    EXPECT_EQ(parse({})->seed, std::nullopt);
+}
+
+TEST(Cli, SeedOnlyWithRoundsOfChildren) {
+    expect_refused({"--seed"}, "--seed needs a whole number");
+    expect_refused({"--seed", "x"}, "--seed needs a whole number");
+    expect_refused({"--seed", "1", "--in-process"}, "--seed goes only with a run of children");
+    expect_refused({"--list", "--seed", "1"}, "--seed goes only with a run of children");
+}
+
+TEST(Cli, ChildRunsOneRepetitionSilentlyAtTheGivenRate) {
     auto path = fresh_dir("plumb_cli_child.raw");
-    auto c    = run(counters(),
-                    {"--child", "count_a", "--n", "16", "--count", "40", "--out", path.string()});
+    auto c    = run(counters(), {"--child", "count_a", "--n", "16", "--count", "40", "--ghz", "2.5",
+                                 "--out", path.string()});
     ASSERT_EQ(c.code, 0) << c.err;
     EXPECT_EQ(c.out, "");
     EXPECT_EQ(c.err, "");
@@ -267,41 +297,48 @@ TEST(Cli, ChildRunsOneRepetitionSilently) {
     ASSERT_TRUE(raw) << raw.error();
     EXPECT_EQ(raw->header.n, 16u);
     EXPECT_EQ(raw->header.count, 40u);
+    EXPECT_EQ(raw->header.ghz, 2.5);
 }
 
 TEST(Cli, ChildUnknownCaseStops) {
-    auto c = run(counters(), {"--child", "count_c", "--n", "1", "--count", "1", "--out", "f"});
+    auto c = run(counters(),
+                 {"--child", "count_c", "--n", "1", "--count", "1", "--ghz", "1", "--out", "f"});
     EXPECT_EQ(c.code, 1);
     EXPECT_EQ(c.err, "plumb: no case named count_c\n");
 }
 
 TEST(Cli, ChildReportsAnUnwritableFile) {
     auto path = fresh_dir("plumb_cli_child_dir") / "x.raw";
-    auto c =
-        run(counters(), {"--child", "count_a", "--n", "1", "--count", "1", "--out", path.string()});
+    auto c    = run(counters(), {"--child", "count_a", "--n", "1", "--count", "1", "--ghz", "1",
+                                 "--out", path.string()});
     EXPECT_EQ(c.code, 1);
     EXPECT_NE(c.err.find("cannot open"), std::string::npos) << c.err;
 }
 
 TEST(Cli, ParsesCalibrate) {
-    auto c = parse({"--calibrate", "push_a", "--out", "runs/a/push_a.plan"});
+    auto c = parse({"--calibrate", "push_a", "--ghz", "2.5", "--out", "runs/a/push_a.plan"});
     ASSERT_TRUE(c) << c.error();
-    EXPECT_EQ(*c, (plumb::Command{
-                      .kind = Kind::calibrate, .name = "push_a", .out = "runs/a/push_a.plan"}));
+    EXPECT_EQ(
+        *c,
+        (plumb::Command{
+            .kind = Kind::calibrate, .name = "push_a", .out = "runs/a/push_a.plan", .ghz = 2.5}));
 }
 
-TEST(Cli, CalibrateNeedsOnlyItsFile) {
+TEST(Cli, CalibrateNeedsItsRateAndFile) {
     expect_refused({"--calibrate"}, "--calibrate needs a case name");
-    expect_refused({"--calibrate", "a"}, "--calibrate needs --out");
-    expect_refused({"--calibrate", "a", "--out", "f", "--n", "1"},
+    expect_refused({"--calibrate", "a", "--ghz", "1"}, "--calibrate needs --ghz and --out");
+    expect_refused({"--calibrate", "a", "--out", "f"}, "--calibrate needs --ghz and --out");
+    expect_refused({"--calibrate", "a", "--ghz", "1", "--out", "f", "--n", "1"},
                    "--n and --count go only with --child");
-    expect_refused({"--calibrate", "a", "--out", "f", "--in-process"}, "only with a run");
+    expect_refused({"--calibrate", "a", "--ghz", "1", "--out", "f", "--in-process"},
+                   "only with a run");
     expect_refused({"--calibrate", "a", "--child", "a"}, "one command at a time");
 }
 
 TEST(Cli, CalibrateWritesThePlanSilently) {
     auto path = fresh_dir("plumb_cli_calibrate.plan");
-    auto c    = run(counters(), {"--calibrate", "count_a", "--out", path.string()});
+    auto ghz  = std::format("{}", plumb::TscClock::calibrate(std::chrono::milliseconds{20}).ghz());
+    auto c    = run(counters(), {"--calibrate", "count_a", "--ghz", ghz, "--out", path.string()});
     ASSERT_EQ(c.code, 0) << c.err;
     EXPECT_EQ(c.out, "");
     EXPECT_EQ(c.err, "");
@@ -312,14 +349,14 @@ TEST(Cli, CalibrateWritesThePlanSilently) {
 }
 
 TEST(Cli, CalibrateUnknownCaseStops) {
-    auto c = run(counters(), {"--calibrate", "count_c", "--out", "f"});
+    auto c = run(counters(), {"--calibrate", "count_c", "--ghz", "1", "--out", "f"});
     EXPECT_EQ(c.code, 1);
     EXPECT_EQ(c.err, "plumb: no case named count_c\n");
 }
 
 TEST(Cli, CalibrateReportsAnUnwritableFile) {
     auto path = fresh_dir("plumb_cli_calibrate_dir") / "x.plan";
-    auto c    = run(counters(), {"--calibrate", "count_a", "--out", path.string()});
+    auto c    = run(counters(), {"--calibrate", "count_a", "--ghz", "1", "--out", path.string()});
     EXPECT_EQ(c.code, 1);
     EXPECT_NE(c.err.find("cannot open"), std::string::npos) << c.err;
 }

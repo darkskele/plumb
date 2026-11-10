@@ -66,4 +66,3 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
 Code:
 
 - [`include/plumb/batch.hpp:31`](include/plumb/batch.hpp#L31) An op returning `plumb::Measured` takes its own samples.
-- [`include/plumb/cli.hpp:34`](include/plumb/cli.hpp#L34) Without `--in-process`, the parent runs each repetition in a child.

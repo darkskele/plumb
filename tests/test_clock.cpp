@@ -79,3 +79,13 @@ TEST(ClockDeathTest, EmptyWindowStops) {
 }
 
 TEST(ClockDeathTest, NoReadsStops) { EXPECT_DEATH((void)plumb::TscClock::stamp_cost(0), "reads"); }
+
+TEST(Clock, AtAGivenRate) {
+    auto clock = plumb::TscClock::at(2.5);
+    EXPECT_EQ(clock.ghz(), 2.5);
+    EXPECT_EQ(clock.ns(5), 2.0);
+}
+
+TEST(ClockDeathTest, RateAtOrBelowZeroStops) {
+    EXPECT_DEATH((void)plumb::TscClock::at(0), "ghz > 0");
+}

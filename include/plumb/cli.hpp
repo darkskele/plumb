@@ -2,15 +2,21 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <expected>
 #include <filesystem>
+#include <optional>
 #include <print>
+#include <random>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "plumb/parent.hpp"
+#include "plumb/process.hpp"
 #include "plumb/registry.hpp"
 #include "plumb/run.hpp"
 
@@ -20,18 +26,19 @@ namespace plumb {
 struct Command {
     enum class Kind { list, check, run, child, calibrate };
 
-    Kind                  kind;
-    std::string_view      name       = {};
-    bool                  in_process = false;
-    std::filesystem::path out        = {};
-    std::size_t           n          = 0;
-    std::size_t           count      = 0;
+    Kind                         kind;
+    std::string_view             name       = {};
+    bool                         in_process = false;
+    std::filesystem::path        out        = {};
+    std::size_t                  n          = 0;
+    std::size_t                  count      = 0;
+    double                       ghz        = 0;
+    std::optional<std::uint64_t> seed       = {};
 
     bool operator==(const Command&) const = default;
 };
 
 /// @brief Reads the command line, without the program name. With no command, every case runs.
-/// @todo Without `--in-process`, the parent runs each repetition in a child.
 inline std::expected<Command, std::string> parse(std::span<const std::string_view> args) {
     Command c{.kind = Command::Kind::run};
     bool    chosen    = false;
@@ -70,6 +77,14 @@ inline std::expected<Command, std::string> parse(std::span<const std::string_vie
                 i + 1 < args.size() ? detail::number<std::size_t>(args[++i]).value_or(0) : 0;
             if (v == 0) return std::unexpected(std::string(a) + " needs a whole number above zero");
             (a == "--n" ? c.n : c.count) = v;
+        } else if (a == "--ghz") {
+            auto v = i + 1 < args.size() ? detail::number<double>(args[++i]) : std::nullopt;
+            if (!v || !std::isfinite(*v) || *v <= 0)
+                return std::unexpected("--ghz needs a rate above zero");
+            c.ghz = *v;
+        } else if (a == "--seed") {
+            c.seed = i + 1 < args.size() ? detail::number<std::uint64_t>(args[++i]) : std::nullopt;
+            if (!c.seed) return std::unexpected("--seed needs a whole number");
         } else {
             return std::unexpected("unknown argument " + std::string(a));
         }
@@ -82,9 +97,14 @@ inline std::expected<Command, std::string> parse(std::span<const std::string_vie
         return std::unexpected("--out goes only with a run");
     if (c.kind != child && (c.n != 0 || c.count != 0))
         return std::unexpected("--n and --count go only with --child");
-    if (c.kind == child && (c.n == 0 || c.count == 0 || c.out.empty()))
-        return std::unexpected("--child needs --n, --count and --out");
-    if (c.kind == calibrate && c.out.empty()) return std::unexpected("--calibrate needs --out");
+    if (c.kind != child && c.kind != calibrate && c.ghz != 0)
+        return std::unexpected("--ghz goes only with --child or --calibrate");
+    if ((c.kind != run || c.in_process) && c.seed)
+        return std::unexpected("--seed goes only with a run of children");
+    if (c.kind == child && (c.n == 0 || c.count == 0 || c.ghz == 0 || c.out.empty()))
+        return std::unexpected("--child needs --n, --count, --ghz and --out");
+    if (c.kind == calibrate && (c.ghz == 0 || c.out.empty()))
+        return std::unexpected("--calibrate needs --ghz and --out");
     return c;
 }
 
@@ -94,7 +114,8 @@ inline int run(std::span<const std::string_view> args, const Registry& r, std::F
     auto command = parse(args);
     if (!command) {
         std::println(err, "plumb: {}", command.error());
-        std::println(err, "usage: [--run NAME] [--in-process] [--out DIR] | --list | --check");
+        std::println(
+            err, "usage: [--run NAME] [--in-process] [--seed S] [--out DIR] | --list | --check");
         return 2;
     }
 
@@ -109,8 +130,10 @@ inline int run(std::span<const std::string_view> args, const Registry& r, std::F
             std::println(err, "plumb: no case named {}", command->name);
             return 1;
         }
-        if (command->kind == Command::Kind::calibrate) return run_calibrate(*it, command->out, err);
-        return run_child(*it, {.n = command->n, .count = command->count}, command->out, err);
+        if (command->kind == Command::Kind::calibrate)
+            return run_calibrate(*it, command->ghz, command->out, err);
+        return run_child(*it, {.n = command->n, .count = command->count}, command->ghz,
+                         command->out, err);
     }
 
     if (command->kind == Command::Kind::run) {
@@ -127,7 +150,10 @@ inline int run(std::span<const std::string_view> args, const Registry& r, std::F
         std::ranges::sort(cases, {}, &Entry::name);
         auto dir = command->out.empty() ? detail::default_out(std::chrono::system_clock::now())
                                         : command->out;
-        return run_in_process(cases, dir, out, err);
+        if (command->in_process) return run_in_process(cases, dir, out, err);
+        std::random_device random;
+        auto seed = command->seed.value_or((std::uint64_t{random()} << 32) | random());
+        return run_parent(cases, detail::self(), dir, seed, detail::default_rounds, out, err);
     }
 
     if (command->kind == Command::Kind::list) {
