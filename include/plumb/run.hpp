@@ -1,0 +1,132 @@
+#pragma once
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstddef>
+#include <cstdio>
+#include <expected>
+#include <filesystem>
+#include <format>
+#include <print>
+#include <ranges>
+#include <span>
+#include <string>
+#include <vector>
+
+#include "plumb/batch.hpp"
+#include "plumb/clock.hpp"
+#include "plumb/raw.hpp"
+#include "plumb/registry.hpp"
+#include "plumb/summary.hpp"
+#include "plumb/table.hpp"
+
+namespace plumb {
+
+/// @brief How a repetition runs. Batches of `n` ops, `count` of them.
+struct Plan {
+    std::size_t n;
+    std::size_t count;
+};
+
+namespace detail {
+
+inline constexpr double      batch_target_ns = 5'000;
+inline constexpr double      run_target_ns   = 1e9;
+inline constexpr std::size_t min_count       = 10;
+inline constexpr std::size_t max_count       = 100'000;
+
+/// @brief Batches that fill the run's target time, at `batch_ns` each.
+inline std::size_t count_for(double batch_ns) pre(batch_ns > 0) {
+    return std::clamp(static_cast<std::size_t>(run_target_ns / batch_ns), min_count, max_count);
+}
+
+/// @brief The fastest of a few batches of `n` ops, in nanoseconds.
+inline double fastest_batch_ns(const Entry& e, std::size_t n, const TscClock& clock) {
+    auto b = e.batches(n, 5, {.time = {}, .batches = 1});
+    return clock.ns(static_cast<std::int64_t>(std::ranges::min(b.ticks)));
+}
+
+}  // namespace detail
+
+/// @brief The plan for a case. The batch doubles until it takes the batch target or reaches the
+/// case's `max_batch`, then the count fills the run's target time.
+inline Plan size(const Entry& e, const TscClock& clock) {
+    std::size_t n  = 1;
+    double      ns = detail::fastest_batch_ns(e, n, clock);
+    while (ns < detail::batch_target_ns && n < e.max_batch) {
+        n  = std::min(n * 2, e.max_batch);
+        ns = detail::fastest_batch_ns(e, n, clock);
+    }
+    return {.n = n, .count = detail::count_for(ns)};
+}
+
+namespace detail {
+
+/// @brief The run directory named for its start, in UTC.
+inline std::filesystem::path default_out(std::chrono::system_clock::time_point start) {
+    return std::filesystem::path("plumb_runs") /
+           std::format("{:%Y%m%d_%H%M%S}", std::chrono::floor<std::chrono::seconds>(start));
+}
+
+/// @brief Sizes and runs a case, writes its raw file to `path` and returns its row.
+inline std::expected<Row, std::string> run_case(const Entry& e, const TscClock& clock,
+                                                bool invariant, const std::filesystem::path& path) {
+    auto plan = size(e, clock);
+    auto raw  = to_raw(e.batches(plan.n, plan.count), clock, invariant);
+    if (auto written = write_raw(path, raw); !written) return std::unexpected(written.error());
+
+    auto per_op =
+        raw.ns |
+        std::views::transform([&](double ns) { return ns / static_cast<double>(plan.n); }) |
+        std::ranges::to<std::vector>();
+    std::ranges::sort(per_op);
+    return Row{.name       = e.name,
+               .n          = plan.n,
+               .count      = plan.count,
+               .min        = per_op.front(),
+               .p5         = percentile(per_op, 0.05),
+               .p50        = percentile(per_op, 0.50),
+               .p95        = percentile(per_op, 0.95),
+               .max        = per_op.back(),
+               .stamp_mean = raw.header.stamp_mean,
+               .stamp_sd   = std::sqrt(raw.header.stamp_variance)};
+}
+
+}  // namespace detail
+
+/// @brief Runs `cases` in this process, one raw file each in `dir`, then prints their table.
+/// Returns the exit code.
+inline int run_in_process(std::span<const Entry* const> cases, const std::filesystem::path& dir,
+                          std::FILE* out, std::FILE* err) {
+    std::error_code made;
+    std::filesystem::create_directories(dir, made);
+    if (made) {
+        std::println(err, "plumb: cannot make {}: {}", dir.string(), made.message());
+        return 1;
+    }
+
+    bool invariant = TscClock::invariant();
+    if (!invariant)
+        std::println(err, "plumb: warning: the TSC is not invariant, figures may drift");
+    auto clock = TscClock::calibrate(std::chrono::milliseconds{100});
+
+    std::vector<Row> rows;
+    int              code = 0;
+    for (const Entry* e : cases) {
+        auto row = detail::run_case(*e, clock, invariant, dir / (std::string(e->name) + ".raw"));
+        if (row)
+            rows.push_back(*row);
+        else {
+            std::println(err, "plumb: {}", row.error());
+            code = 1;
+        }
+    }
+    bool colour = detail::wants_colour(out);
+    print_table(out, rows, colour);
+    std::println(out, "{}",
+                 detail::paint(std::format("raw files in {}", dir.string()), detail::dim, colour));
+    return code;
+}
+
+}  // namespace plumb

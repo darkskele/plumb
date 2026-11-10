@@ -17,6 +17,10 @@ plumb_add_bench(plumb_selftest selftest/bench_a.cpp selftest/bench_b.cpp)
 add_test(NAME plumb_selftest_lists_both COMMAND plumb_selftest --list)
 set_tests_properties(plumb_selftest_lists_both PROPERTIES PASS_REGULAR_EXPRESSION "^selftest_a\nselftest_b\n$")
 
+# With no command the bench binary runs every case and prints a row for each.
+add_test(NAME plumb_selftest_runs_every_case COMMAND plumb_selftest --out ${CMAKE_CURRENT_BINARY_DIR}/selftest_run)
+set_tests_properties(plumb_selftest_runs_every_case PROPERTIES PASS_REGULAR_EXPRESSION "\nselftest_a +64 [^\n]*\nselftest_b +1 ")
+
 # One name in two files stops the binary before anything runs.
 add_executable(plumb_selftest_dup selftest_dup/bench_a.cpp selftest_dup/bench_b.cpp)
 target_link_libraries(plumb_selftest_dup PRIVATE plumb::main)
@@ -32,6 +36,13 @@ plumb_build_test(plumb_add_bench_stops_duplicate plumb_selftest_dup_checked "dup
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     plumb_add_bench(plumb_selftest_odr EXCLUDE_FROM_ALL selftest_odr/bench_a.cpp selftest_odr/bench_b.cpp)
     plumb_build_test(plumb_add_bench_stops_odr plumb_selftest_odr "One Definition Rule")
+endif()
+
+# The timed loop in an optimised build: aligned, the op inlined between the stamps, no call there.
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    add_executable(plumb_disasm disasm/marker.cpp)
+    target_link_libraries(plumb_disasm PRIVATE plumb::plumb)
+    add_test(NAME plumb_disasm_batch COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/disasm/check.sh $<TARGET_FILE:plumb_disasm>)
 endif()
 
 # Each compile_fail/*.cpp must fail to compile with the message on its first line, after "// expect: ".
