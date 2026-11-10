@@ -16,18 +16,13 @@
 
 #include "plumb/batch.hpp"
 #include "plumb/clock.hpp"
+#include "plumb/plan.hpp"
 #include "plumb/raw.hpp"
 #include "plumb/registry.hpp"
 #include "plumb/summary.hpp"
 #include "plumb/table.hpp"
 
 namespace plumb {
-
-/// @brief How a repetition runs. Batches of `n` ops, `count` of them.
-struct Plan {
-    std::size_t n;
-    std::size_t count;
-};
 
 namespace detail {
 
@@ -51,14 +46,14 @@ inline double fastest_batch_ns(const Entry& e, std::size_t n, const TscClock& cl
 
 /// @brief The plan for a case. The batch doubles until it takes the batch target or reaches the
 /// case's `max_batch`, then the count fills the run's target time.
-inline Plan size(const Entry& e, const TscClock& clock) {
+inline Calibration size(const Entry& e, const TscClock& clock) {
     std::size_t n  = 1;
     double      ns = detail::fastest_batch_ns(e, n, clock);
     while (ns < detail::batch_target_ns && n < e.max_batch) {
         n  = std::min(n * 2, e.max_batch);
         ns = detail::fastest_batch_ns(e, n, clock);
     }
-    return {.n = n, .count = detail::count_for(ns)};
+    return {.plan = {.n = n, .count = detail::count_for(ns)}, .batch_ns = ns};
 }
 
 namespace detail {
@@ -83,7 +78,7 @@ inline std::expected<Raw, std::string> run_repetition(const Entry& e, const TscC
 /// @brief Sizes and runs a case, writes its raw file to `path` and returns its row.
 inline std::expected<Row, std::string> run_case(const Entry& e, const TscClock& clock,
                                                 bool invariant, const std::filesystem::path& path) {
-    auto plan = size(e, clock);
+    auto plan = size(e, clock).plan;
     auto raw  = run_repetition(e, clock, invariant, plan, path);
     if (!raw) return std::unexpected(raw.error());
 
@@ -105,6 +100,17 @@ inline std::expected<Row, std::string> run_case(const Entry& e, const TscClock& 
 }
 
 }  // namespace detail
+
+/// @brief Sizes a case in this process and writes its plan to `path`. Prints only errors.
+/// Returns the exit code.
+inline int run_calibrate(const Entry& e, const std::filesystem::path& path, std::FILE* err) {
+    auto written = write_plan(path, size(e, TscClock::calibrate(detail::clock_window)));
+    if (!written) {
+        std::println(err, "plumb: {}", written.error());
+        return 1;
+    }
+    return 0;
+}
 
 /// @brief One repetition of a case to `plan` in this process, its raw file written to `path`.
 /// Prints only errors. Returns the exit code.

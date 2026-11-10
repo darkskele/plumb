@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "plumb/cli.hpp"
+#include "plumb/plan.hpp"
 #include "plumb/raw.hpp"
 
 namespace {
@@ -278,6 +279,47 @@ TEST(Cli, ChildReportsAnUnwritableFile) {
     auto path = fresh_dir("plumb_cli_child_dir") / "x.raw";
     auto c =
         run(counters(), {"--child", "count_a", "--n", "1", "--count", "1", "--out", path.string()});
+    EXPECT_EQ(c.code, 1);
+    EXPECT_NE(c.err.find("cannot open"), std::string::npos) << c.err;
+}
+
+TEST(Cli, ParsesCalibrate) {
+    auto c = parse({"--calibrate", "push_a", "--out", "runs/a/push_a.plan"});
+    ASSERT_TRUE(c) << c.error();
+    EXPECT_EQ(*c, (plumb::Command{
+                      .kind = Kind::calibrate, .name = "push_a", .out = "runs/a/push_a.plan"}));
+}
+
+TEST(Cli, CalibrateNeedsOnlyItsFile) {
+    expect_refused({"--calibrate"}, "--calibrate needs a case name");
+    expect_refused({"--calibrate", "a"}, "--calibrate needs --out");
+    expect_refused({"--calibrate", "a", "--out", "f", "--n", "1"},
+                   "--n and --count go only with --child");
+    expect_refused({"--calibrate", "a", "--out", "f", "--in-process"}, "only with a run");
+    expect_refused({"--calibrate", "a", "--child", "a"}, "one command at a time");
+}
+
+TEST(Cli, CalibrateWritesThePlanSilently) {
+    auto path = fresh_dir("plumb_cli_calibrate.plan");
+    auto c    = run(counters(), {"--calibrate", "count_a", "--out", path.string()});
+    ASSERT_EQ(c.code, 0) << c.err;
+    EXPECT_EQ(c.out, "");
+    EXPECT_EQ(c.err, "");
+    auto plan = plumb::read_plan(path);
+    ASSERT_TRUE(plan) << plan.error();
+    EXPECT_EQ(plan->plan.n, 64u);
+    EXPECT_EQ(plan->plan.count, plumb::detail::count_for(plan->batch_ns));
+}
+
+TEST(Cli, CalibrateUnknownCaseStops) {
+    auto c = run(counters(), {"--calibrate", "count_c", "--out", "f"});
+    EXPECT_EQ(c.code, 1);
+    EXPECT_EQ(c.err, "plumb: no case named count_c\n");
+}
+
+TEST(Cli, CalibrateReportsAnUnwritableFile) {
+    auto path = fresh_dir("plumb_cli_calibrate_dir") / "x.plan";
+    auto c    = run(counters(), {"--calibrate", "count_a", "--out", path.string()});
     EXPECT_EQ(c.code, 1);
     EXPECT_NE(c.err.find("cannot open"), std::string::npos) << c.err;
 }

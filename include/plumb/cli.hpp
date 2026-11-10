@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <charconv>
 #include <chrono>
 #include <cstdio>
 #include <expected>
@@ -10,7 +9,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <vector>
 
 #include "plumb/registry.hpp"
@@ -20,7 +18,7 @@ namespace plumb {
 
 /// @brief What the command line asks the binary to do.
 struct Command {
-    enum class Kind { list, check, run, child };
+    enum class Kind { list, check, run, child, calibrate };
 
     Kind                  kind;
     std::string_view      name       = {};
@@ -46,21 +44,16 @@ inline std::expected<Command, std::string> parse(std::span<const std::string_vie
         c.kind        = k;
         return chosen = true;
     };
-    // A whole number above zero, or zero for anything else.
-    auto whole = [](std::string_view s) {
-        std::size_t v   = 0;
-        auto [end, err] = std::from_chars(s.data(), s.data() + s.size(), v);
-        return err == std::errc{} && end == s.data() + s.size() ? v : 0;
-    };
 
     for (std::size_t i = 0; i < args.size(); ++i) {
         std::string_view a = args[i];
         if (a == "--list" || a == "--check") {
             if (!choose(a == "--list" ? Command::Kind::list : Command::Kind::check))
                 return std::unexpected("one command at a time");
-        } else if (a == "--child") {
-            if (!value(i)) return std::unexpected("--child needs a case name");
-            if (!choose(Command::Kind::child)) return std::unexpected("one command at a time");
+        } else if (a == "--child" || a == "--calibrate") {
+            if (!value(i)) return std::unexpected(std::string(a) + " needs a case name");
+            if (!choose(a == "--child" ? Command::Kind::child : Command::Kind::calibrate))
+                return std::unexpected("one command at a time");
             c.name = args[++i];
         } else if (a == "--run") {
             if (!value(i)) return std::unexpected("--run needs a case name");
@@ -73,7 +66,8 @@ inline std::expected<Command, std::string> parse(std::span<const std::string_vie
             if (!value(i)) return std::unexpected("--out needs a path");
             c.out = args[++i];
         } else if (a == "--n" || a == "--count") {
-            std::size_t v = i + 1 < args.size() ? whole(args[++i]) : 0;
+            std::size_t v =
+                i + 1 < args.size() ? detail::number<std::size_t>(args[++i]).value_or(0) : 0;
             if (v == 0) return std::unexpected(std::string(a) + " needs a whole number above zero");
             (a == "--n" ? c.n : c.count) = v;
         } else {
@@ -90,6 +84,7 @@ inline std::expected<Command, std::string> parse(std::span<const std::string_vie
         return std::unexpected("--n and --count go only with --child");
     if (c.kind == child && (c.n == 0 || c.count == 0 || c.out.empty()))
         return std::unexpected("--child needs --n, --count and --out");
+    if (c.kind == calibrate && c.out.empty()) return std::unexpected("--calibrate needs --out");
     return c;
 }
 
@@ -107,13 +102,14 @@ inline int run(std::span<const std::string_view> args, const Registry& r, std::F
     for (std::string_view name : dups) std::println(err, "plumb: duplicate case name {}", name);
     if (!dups.empty()) return 1;
 
-    if (command->kind == Command::Kind::child) {
+    if (command->kind == Command::Kind::child || command->kind == Command::Kind::calibrate) {
         auto entries = r.entries();
         auto it      = std::ranges::find(entries, command->name, &Entry::name);
         if (it == entries.end()) {
             std::println(err, "plumb: no case named {}", command->name);
             return 1;
         }
+        if (command->kind == Command::Kind::calibrate) return run_calibrate(*it, command->out, err);
         return run_child(*it, {.n = command->n, .count = command->count}, command->out, err);
     }
 
