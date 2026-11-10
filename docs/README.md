@@ -23,14 +23,14 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~Registry as a function-local static in an inline function. Duplicate names refused at startup.~~
     - [x] ~~`plumb::main` with `--list` and `--check`.~~
     - [x] ~~`plumb_add_bench`. A duplicate name fails the build. Debug builds link with LTO, so two types sharing a name across files fail the link.~~
-- [ ] 3. Timed runner, one process. Done when `--run NAME --in-process` writes a case's raw file and prints its ns per op.
+- [x] ~~3. Timed runner, one process. Done when `--run NAME --in-process` writes a case's raw file and prints its ns per op.~~
     - [x] ~~TSC clock, fenced, from cds benchInfra's `tsc.hpp`. TSC frequency.~~
     - [x] ~~Stamp pair cost on the current core: min, max, mean and variance. Recorded, never subtracted.~~
     - [x] ~~The batch loop: fixture made opaque, runtime count, op result kept, timed loop aligned.~~
     - [x] ~~Fixture rebuilt in place between batches, or `reset`.~~
     - [x] ~~Warmup by time and count.~~
     - [x] ~~Raw sample writer, f64 ns behind a header.~~
-    - [ ] `--run NAME --in-process`. A TSC that is not invariant is warned of and the run carries on.
+    - [x] ~~`--run NAME --in-process`. A TSC that is not invariant is warned of and the run carries on.~~
 - [ ] 4. Measured. Done when a case whose op returns `plumb::Measured` gives one sample per op, with the wall time beside it.
     - [ ] `plumb::Measured`, TSC ticks the op took from plumb's clock.
     - [ ] Each op of a batch its own sample. The `wall` figure beside it.

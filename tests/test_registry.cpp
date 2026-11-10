@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cstddef>
 #include <string_view>
 #include <vector>
 
@@ -38,4 +39,35 @@ TEST(RegistryDeathTest, InvalidNameStops) {
 TEST(RegistryDeathTest, ZeroMaxBatchStops) {
     plumb::Registry r;
     EXPECT_DEATH(r.add({.name = "a", .max_batch = 0}), "max_batch >= 1");
+}
+
+namespace {
+
+struct Counter {
+    static inline int resets = 0;
+
+    std::size_t calls = 0;
+};
+
+constexpr auto count_op = [](Counter& c) { ++c.calls; };
+
+constexpr plumb::detail::Warmup no_warmup{.time = {}, .batches = 0};
+
+}  // namespace
+
+TEST(Registry, EntryRunsItsCase) {
+    auto e = plumb::detail::entry<Counter, decltype(count_op)>("count", 4, plumb::keep);
+    EXPECT_EQ(e.name, "count");
+    EXPECT_EQ(e.max_batch, 4u);
+    auto b = e.batches(4, 3, no_warmup);
+    EXPECT_EQ(b.n, 4u);
+    EXPECT_EQ(b.ticks.size(), 3u);
+}
+
+TEST(Registry, EntryKeepsItsReset) {
+    Counter::resets = 0;
+    auto e          = plumb::detail::entry<Counter, decltype(count_op)>("count", 1,
+                                                                        [](Counter&) { ++Counter::resets; });
+    (void)e.batches(1, 3, no_warmup);
+    EXPECT_EQ(Counter::resets, 2);
 }

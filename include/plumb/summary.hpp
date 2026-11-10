@@ -1,8 +1,10 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <limits>
+#include <span>
 
 namespace plumb {
 
@@ -38,5 +40,12 @@ class Summary {
     double      mean_    = 0.0;
     double      squares_ = 0.0;
 };
+
+/// @brief The nearest-rank `p` quantile of a sorted series, `p` from 0 to 1.
+[[nodiscard]] inline double percentile(std::span<const double> sorted, double p)
+    pre(!sorted.empty()) pre(p >= 0.0 && p <= 1.0) {
+    auto rank = static_cast<std::size_t>(std::ceil(p * static_cast<double>(sorted.size())));
+    return sorted[rank == 0 ? 0 : rank - 1];
+}
 
 }  // namespace plumb

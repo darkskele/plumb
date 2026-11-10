@@ -10,8 +10,6 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
 - [ ] 2. Registry and case API. Done when cases in two files list together and a duplicate stops the binary.
     - [ ] Compile-time checks: name characters, `max_batch` at least one, what the op returns, a `reset` that fits the fixture. Each proven by a source that must fail to compile with its message.
         - [ ] What the op returns, once `plumb::Measured` exists in step 4.
-- [ ] 3. Timed runner, one process. Done when `--run NAME --in-process` writes a case's raw file and prints its ns per op.
-    - [ ] `--run NAME --in-process`. A TSC that is not invariant is warned of and the run carries on.
 - [ ] 4. Measured. Done when a case whose op returns `plumb::Measured` gives one sample per op, with the wall time beside it.
     - [ ] `plumb::Measured`, TSC ticks the op took from plumb's clock.
     - [ ] Each op of a batch its own sample. The `wall` figure beside it.
@@ -66,3 +64,4 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
 Code:
 
 - [`include/plumb/batch.hpp:31`](include/plumb/batch.hpp#L31) An op returning `plumb::Measured` takes its own samples.
+- [`include/plumb/cli.hpp:32`](include/plumb/cli.hpp#L32) Without `--in-process`, the parent runs each repetition in a child.

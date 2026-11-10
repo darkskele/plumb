@@ -6,8 +6,8 @@
 #include <type_traits>
 #include <vector>
 
-#include "plumb/case.hpp"
 #include "plumb/clock.hpp"
+#include "plumb/fixture.hpp"
 #include "plumb/summary.hpp"
 
 namespace plumb::detail {
