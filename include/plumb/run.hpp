@@ -69,15 +69,26 @@ inline std::filesystem::path default_out(std::chrono::system_clock::time_point s
            std::format("{:%Y%m%d_%H%M%S}", std::chrono::floor<std::chrono::seconds>(start));
 }
 
+inline constexpr std::chrono::milliseconds clock_window{100};
+
+/// @brief Runs one repetition of a case to `plan` and writes its raw file to `path`.
+inline std::expected<Raw, std::string> run_repetition(const Entry& e, const TscClock& clock,
+                                                      bool invariant, Plan plan,
+                                                      const std::filesystem::path& path) {
+    auto raw = to_raw(e.batches(plan.n, plan.count), clock, invariant);
+    if (auto written = write_raw(path, raw); !written) return std::unexpected(written.error());
+    return raw;
+}
+
 /// @brief Sizes and runs a case, writes its raw file to `path` and returns its row.
 inline std::expected<Row, std::string> run_case(const Entry& e, const TscClock& clock,
                                                 bool invariant, const std::filesystem::path& path) {
     auto plan = size(e, clock);
-    auto raw  = to_raw(e.batches(plan.n, plan.count), clock, invariant);
-    if (auto written = write_raw(path, raw); !written) return std::unexpected(written.error());
+    auto raw  = run_repetition(e, clock, invariant, plan, path);
+    if (!raw) return std::unexpected(raw.error());
 
     auto per_op =
-        raw.ns |
+        raw->ns |
         std::views::transform([&](double ns) { return ns / static_cast<double>(plan.n); }) |
         std::ranges::to<std::vector>();
     std::ranges::sort(per_op);
@@ -89,11 +100,23 @@ inline std::expected<Row, std::string> run_case(const Entry& e, const TscClock& 
                .p50        = percentile(per_op, 0.50),
                .p95        = percentile(per_op, 0.95),
                .max        = per_op.back(),
-               .stamp_mean = raw.header.stamp_mean,
-               .stamp_sd   = std::sqrt(raw.header.stamp_variance)};
+               .stamp_mean = raw->header.stamp_mean,
+               .stamp_sd   = std::sqrt(raw->header.stamp_variance)};
 }
 
 }  // namespace detail
+
+/// @brief One repetition of a case to `plan` in this process, its raw file written to `path`.
+/// Prints only errors. Returns the exit code.
+inline int run_child(const Entry& e, Plan plan, const std::filesystem::path& path, std::FILE* err) {
+    auto clock = TscClock::calibrate(detail::clock_window);
+    auto raw   = detail::run_repetition(e, clock, TscClock::invariant(), plan, path);
+    if (!raw) {
+        std::println(err, "plumb: {}", raw.error());
+        return 1;
+    }
+    return 0;
+}
 
 /// @brief Runs `cases` in this process, one raw file each in `dir`, then prints their table.
 /// Returns the exit code.
@@ -109,7 +132,7 @@ inline int run_in_process(std::span<const Entry* const> cases, const std::filesy
     bool invariant = TscClock::invariant();
     if (!invariant)
         std::println(err, "plumb: warning: the TSC is not invariant, figures may drift");
-    auto clock = TscClock::calibrate(std::chrono::milliseconds{100});
+    auto clock = TscClock::calibrate(detail::clock_window);
 
     std::vector<Row> rows;
     int              code = 0;

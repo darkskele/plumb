@@ -214,3 +214,70 @@ TEST(Cli, RunReportsADirectoryItCannotMake) {
     EXPECT_EQ(c.out, "");
     EXPECT_NE(c.err.find("cannot make"), std::string::npos) << c.err;
 }
+
+TEST(Cli, ParsesChild) {
+    auto c =
+        parse({"--child", "push_a", "--n", "8", "--count", "100", "--out", "runs/a/push_a.0.raw"});
+    ASSERT_TRUE(c) << c.error();
+    EXPECT_EQ(*c, (plumb::Command{.kind  = Kind::child,
+                                  .name  = "push_a",
+                                  .out   = "runs/a/push_a.0.raw",
+                                  .n     = 8,
+                                  .count = 100}));
+}
+
+TEST(Cli, ChildNeedsItsPlanAndFile) {
+    expect_refused({"--child", "a", "--count", "1", "--out", "f"},
+                   "--child needs --n, --count and --out");
+    expect_refused({"--child", "a", "--n", "1", "--out", "f"},
+                   "--child needs --n, --count and --out");
+    expect_refused({"--child", "a", "--n", "1", "--count", "1"},
+                   "--child needs --n, --count and --out");
+    expect_refused({"--child"}, "--child needs a case name");
+}
+
+TEST(Cli, ChildCountsAreWholeAndAboveZero) {
+    for (std::string_view bad : {"0", "-1", "x", "8x", ""}) {
+        auto c = parse({"--child", "a", "--n", bad, "--count", "1", "--out", "f"});
+        ASSERT_FALSE(c) << bad;
+        EXPECT_NE(c.error().find("--n needs a whole number above zero"), std::string::npos)
+            << c.error();
+    }
+    expect_refused({"--child", "a", "--n", "1", "--count", "0", "--out", "f"},
+                   "--count needs a whole number above zero");
+}
+
+TEST(Cli, PlanOnlyWithChild) {
+    expect_refused({"--n", "8"}, "--n and --count go only with --child");
+    expect_refused({"--run", "a", "--count", "8"}, "--n and --count go only with --child");
+    expect_refused({"--child", "a", "--run", "a", "--n", "1", "--count", "1", "--out", "f"},
+                   "only with a run");
+    expect_refused({"--child", "a", "--list"}, "one command at a time");
+}
+
+TEST(Cli, ChildRunsOneRepetitionSilently) {
+    auto path = fresh_dir("plumb_cli_child.raw");
+    auto c    = run(counters(),
+                    {"--child", "count_a", "--n", "16", "--count", "40", "--out", path.string()});
+    ASSERT_EQ(c.code, 0) << c.err;
+    EXPECT_EQ(c.out, "");
+    EXPECT_EQ(c.err, "");
+    auto raw = plumb::read_raw(path);
+    ASSERT_TRUE(raw) << raw.error();
+    EXPECT_EQ(raw->header.n, 16u);
+    EXPECT_EQ(raw->header.count, 40u);
+}
+
+TEST(Cli, ChildUnknownCaseStops) {
+    auto c = run(counters(), {"--child", "count_c", "--n", "1", "--count", "1", "--out", "f"});
+    EXPECT_EQ(c.code, 1);
+    EXPECT_EQ(c.err, "plumb: no case named count_c\n");
+}
+
+TEST(Cli, ChildReportsAnUnwritableFile) {
+    auto path = fresh_dir("plumb_cli_child_dir") / "x.raw";
+    auto c =
+        run(counters(), {"--child", "count_a", "--n", "1", "--count", "1", "--out", path.string()});
+    EXPECT_EQ(c.code, 1);
+    EXPECT_NE(c.err.find("cannot open"), std::string::npos) << c.err;
+}
