@@ -38,7 +38,7 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [ ] The TSC rate measured once by the parent, given to every child.
     - [ ] Calibration child per case: batch size against the target time, sample count against the time cap.
     - [ ] Rounds in an order shuffled by a recorded seed. A child per repetition, the binary re-executing itself.
-    - [ ] Void and rerun: a child that crashed or exited nonzero, `plumb::abandon`, op too close to the stamp's cost.
+    - [ ] Void and rerun: a child that crashed or exited nonzero, `plumb::abandon`, a damaged file.
     - [ ] Profiles `quick` and `full`, `--filter`, `--max-time`, `--plan-from`, the time estimate.
     - [ ] Thread placement within the allowed CPUs, from cds benchInfra's `pin.hpp`.
 - [ ] 6. A/A. Done when an `--aa` run leaves both arms' raw files for every round.

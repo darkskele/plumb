@@ -21,6 +21,11 @@ set_tests_properties(plumb_selftest_lists_both PROPERTIES PASS_REGULAR_EXPRESSIO
 add_test(NAME plumb_selftest_runs_every_case
     COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/selftest/parent.sh $<TARGET_FILE:plumb_selftest> ${CMAKE_CURRENT_BINARY_DIR}/selftest_run)
 
+# Cases that crash or abandon are void and rerun, and a case void three times is dropped.
+plumb_add_bench(plumb_selftest_void selftest_void/bench.cpp)
+add_test(NAME plumb_selftest_voids_and_reruns
+    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/selftest_void/check.sh $<TARGET_FILE:plumb_selftest_void> ${CMAKE_CURRENT_BINARY_DIR}/selftest_void)
+
 # One name in two files stops the binary before anything runs.
 add_executable(plumb_selftest_dup selftest_dup/bench_a.cpp selftest_dup/bench_b.cpp)
 target_link_libraries(plumb_selftest_dup PRIVATE plumb::main)

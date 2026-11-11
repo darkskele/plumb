@@ -4,9 +4,11 @@
 #include <csignal>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "plumb/abandon.hpp"
 #include "plumb/parent.hpp"
 
 using Order = std::vector<std::vector<std::size_t>>;
@@ -63,4 +65,19 @@ TEST(Parent, DescribesAChildThatFailed) {
     EXPECT_EQ(plumb::detail::describe({Kind::signal, SIGSEGV}), "killed by SIGSEGV");
     EXPECT_EQ(plumb::detail::describe({Kind::not_started, 2}),
               "did not start: No such file or directory");
+}
+
+TEST(Parent, WhyAChildIsVoid) {
+    using Kind = plumb::detail::Exit::Kind;
+    EXPECT_EQ(plumb::detail::void_reason({Kind::ok, 0}), std::nullopt);
+    EXPECT_EQ(plumb::detail::void_reason({Kind::nonzero, plumb::detail::abandon_code}),
+              "abandoned");
+    EXPECT_EQ(plumb::detail::void_reason({Kind::nonzero, 3}), "exited 3");
+    EXPECT_EQ(plumb::detail::void_reason({Kind::signal, SIGABRT}), "killed by SIGABRT");
+}
+
+TEST(AbandonDeathTest, SaysWhyAndExitsWithItsCode) {
+    EXPECT_EXIT(plumb::abandon("rig not ready"),
+                testing::ExitedWithCode(plumb::detail::abandon_code),
+                "^plumb: abandoned: rig not ready\n$");
 }

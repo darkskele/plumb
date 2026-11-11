@@ -8,13 +8,16 @@
 #include <format>
 #include <fstream>
 #include <numeric>
+#include <optional>
 #include <print>
 #include <random>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
+#include "plumb/abandon.hpp"
 #include "plumb/plan.hpp"
 #include "plumb/process.hpp"
 #include "plumb/raw.hpp"
@@ -27,6 +30,7 @@ namespace plumb {
 namespace detail {
 
 inline constexpr std::size_t               default_rounds = 5;
+inline constexpr std::size_t               max_voids      = 3;
 inline constexpr std::chrono::milliseconds parent_clock_window{500};
 
 /// @brief Each round's order of `cases` cases, shuffled from `seed`.
@@ -86,10 +90,18 @@ inline std::string describe(Exit e) {
     return {};
 }
 
+/// @brief Why a child's repetition is void, or nothing when it ended well.
+inline std::optional<std::string> void_reason(Exit e) {
+    if (e.kind == Exit::Kind::ok) return {};
+    if (e.kind == Exit::Kind::nonzero && e.code == abandon_code) return "abandoned";
+    return describe(e);
+}
+
 }  // namespace detail
 
 /// @brief Runs `cases` as children of `exe`: one sizing child each, then `rounds` rounds of one
-/// repetition each, in an order shuffled from `seed`. Prints their table. Returns the exit code.
+/// repetition each, in an order shuffled from `seed`. A void child is rerun, and a case void
+/// `max_voids` times is dropped. Prints their table. Returns the exit code.
 inline int run_parent(std::span<const Entry* const> cases, const std::filesystem::path& exe,
                       const std::filesystem::path& dir, std::uint64_t seed, std::size_t rounds,
                       std::FILE* out, std::FILE* err) {
@@ -101,41 +113,58 @@ inline int run_parent(std::span<const Entry* const> cases, const std::filesystem
 
     struct Planned {
         const Entry*             entry;
-        Plan                     plan;
-        std::vector<std::size_t> rounds_done;
+        Plan                     plan        = {};
+        std::size_t              voids       = 0;
+        bool                     dropped     = false;
+        std::vector<std::size_t> rounds_done = {};
     };
 
     std::vector<Planned> planned;
-    for (const Entry* e : cases) {
-        auto path = detail::plan_path(dir, e->name);
-        auto exit = detail::spawn_wait(exe, detail::calibrate_args(e->name, ghz, path));
-        if (exit.kind != detail::Exit::Kind::ok) {
-            std::println(err, "plumb: {} calibration {}", e->name, detail::describe(exit));
-            code = 1;
-            continue;
+    for (const Entry* e : cases) planned.push_back({.entry = e});
+
+    // Runs a child until it ends well and `check` accepts its file, or its case is dropped.
+    auto attempt = [&](Planned& p, std::string_view what, const std::vector<std::string>& args,
+                       const std::filesystem::path& file, auto check) {
+        while (!p.dropped) {
+            auto why = detail::void_reason(detail::spawn_wait(exe, args));
+            if (!why) why = check(file);
+            if (!why) return true;
+            std::error_code ignored;
+            std::filesystem::remove(file, ignored);
+            std::println(err, "plumb: {} {} void, {}", p.entry->name, what, *why);
+            if (++p.voids == detail::max_voids) {
+                std::println(err, "plumb: {} dropped after {} voids", p.entry->name, p.voids);
+                p.dropped = true;
+                code      = 1;
+            }
         }
-        auto c = read_plan(path);
-        if (!c) {
-            std::println(err, "plumb: {}", c.error());
-            code = 1;
-            continue;
-        }
-        planned.push_back({.entry = e, .plan = c->plan, .rounds_done = {}});
+        return false;
+    };
+
+    for (Planned& p : planned) {
+        auto path = detail::plan_path(dir, p.entry->name);
+        (void)attempt(p, "calibration", detail::calibrate_args(p.entry->name, ghz, path), path,
+                      [&](const std::filesystem::path& f) -> std::optional<std::string> {
+                          auto c = read_plan(f);
+                          if (!c) return c.error();
+                          p.plan = c->plan;
+                          return {};
+                      });
     }
 
     auto order = detail::round_order(planned.size(), rounds, seed);
     for (std::size_t r = 0; r < order.size(); ++r) {
         for (std::size_t i : order[r]) {
             auto& p    = planned[i];
-            auto  name = p.entry->name;
-            auto  exit = detail::spawn_wait(
-                exe, detail::child_args(name, p.plan, ghz, detail::raw_path(dir, name, r)));
-            if (exit.kind != detail::Exit::Kind::ok) {
-                std::println(err, "plumb: {} repetition {} {}", name, r, detail::describe(exit));
-                code = 1;
-                continue;
-            }
-            p.rounds_done.push_back(r);
+            auto  path = detail::raw_path(dir, p.entry->name, r);
+            if (attempt(p, std::format("repetition {}", r),
+                        detail::child_args(p.entry->name, p.plan, ghz, path), path,
+                        [](const std::filesystem::path& f) -> std::optional<std::string> {
+                            auto raw = read_raw(f);
+                            if (!raw) return raw.error();
+                            return {};
+                        }))
+                p.rounds_done.push_back(r);
         }
     }
 
@@ -152,7 +181,8 @@ inline int run_parent(std::span<const Entry* const> cases, const std::filesystem
                 code = 1;
             }
         }
-        if (!raws.empty()) rows.push_back(detail::row_of(p.entry->name, p.plan, raws));
+        if (!p.dropped && !raws.empty())
+            rows.push_back(detail::row_of(p.entry->name, p.plan, raws));
     }
 
     bool colour = detail::wants_colour(out);
