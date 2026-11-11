@@ -6,27 +6,20 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
 
 - [ ] 0. Before plumb exists
     - [ ] halln `feature/rigStability` lands as it is. Its `diff.py` and `noise.py` are the reference for step 11.
-    - [ ] cds `feature/benchInfra` does not land its `benchmarks/support` headers (`tsc.hpp`, `pin.hpp`, `histogram.hpp`, `build_info.hpp`) or the latency harness in cds. They seed plumb in steps 3, 5 and 7. Its `tools/bench` changes may land, they are retired in step 13.
+    - [ ] cds `feature/benchInfra` does not land its `benchmarks/support` headers (`tsc.hpp`, `histogram.hpp`, `build_info.hpp`) or the latency harness in cds. They seed plumb in steps 3 and 7. Its `pin.hpp` stays in cds for fixtures that start threads. Its `tools/bench` changes may land, they are retired in step 13.
 - [ ] 2. Registry and case API. Done when cases in two files list together and a duplicate stops the binary.
     - [ ] Compile-time checks: name characters, `max_batch` at least one, what the op returns, a `reset` that fits the fixture. Each proven by a source that must fail to compile with its message.
         - [ ] What the op returns, once `plumb::Measured` exists in step 4.
 - [ ] 4. Measured. Done when a case whose op returns `plumb::Measured` gives one sample per op, with the wall time beside it.
     - [ ] `plumb::Measured`, TSC ticks the op took from plumb's clock.
     - [ ] Each op of a batch its own sample. The `wall` figure beside it.
-- [ ] 5. Parent and plan. Done when a full run of two cases leaves one raw file per repetition and survives a case that crashes.
-    - [ ] The TSC rate measured once by the parent, given to every child.
-    - [ ] Calibration child per case: batch size against the target time, sample count against the time cap.
-    - [ ] Rounds in an order shuffled by a recorded seed. A child per repetition, the binary re-executing itself.
-    - [ ] Void and rerun: a child that crashed or exited nonzero, `plumb::abandon`, a damaged file.
-    - [ ] `--run PATTERN`: every case whose whole name the regex matches.
-    - [ ] Thread placement within the allowed CPUs, from cds benchInfra's `pin.hpp`.
 - [ ] 6. A/A. Done when an `--aa` run leaves both arms' raw files for every round.
     - [ ] `--aa`: two arms of the same build per round, each repetition its own process.
 - [ ] 7. Results. Done when two runs of the same build give binary results files, and console tables a person can compare by eye.
     - [ ] One binary results file per run, schema version 1. Figures and histograms, no samples.
     - [ ] Each repetition folded in as it ends: its own min, p50, p90, p99 and max exact from its samples, its samples into the case's histogram, its raw file deleted unless `--keep-raw`.
     - [ ] Per case: count, min, p50, p90, p99 and max from the histogram, drift windows, log-linear histogram with its layout (from the halln and cds `histogram.hpp`, which are one file).
-    - [ ] Run fields: build, plan, calibration, time. Repetition fields: batch, time, environment, void.
+    - [ ] Run fields: build, plan, calibration, time. Repetition fields: batch, time, environment, void, the allowed CPUs and the CPU at its start and end.
     - [ ] The stamp cost as the first result of every run.
     - [ ] A summary table on the console.
 - [ ] 8. The cds check. Done when `spsc_push_int_1024` gives ns per op within the noise of today's gbench figure for the same push.
