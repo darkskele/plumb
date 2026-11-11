@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "plumb/batch.hpp"
 
@@ -19,7 +20,7 @@ struct Pure {
 };
 
 constexpr auto count_op = [](Counter& c) { ++c.calls; };
-constexpr auto pure_op  = [](Pure& p) { return p.x * 7 + 1; };
+constexpr auto pure_op  = [](Pure& p) { plumb::sink(p.x * 7 + 1); };
 
 using CountOp = decltype(count_op);
 using PureOp  = decltype(pure_op);
@@ -35,16 +36,33 @@ TEST(Batch, RunsTheOpExactlyNTimes) {
 }
 
 TEST(Batch, KeepsAPureOp) {
-    Pure          p;
-    std::uint64_t ticks = plumb::detail::run_batch<Pure, PureOp>(p, 1'000'000);
+    Pure   p;
+    double ticks = plumb::detail::run_batch<Pure, PureOp>(p, 1'000'000);
     // A removed loop costs one stamp pair, tens of ticks.
-    EXPECT_GT(ticks, 100'000u);
+    EXPECT_GT(ticks, 100'000);
 }
 
 TEST(Batch, EmptyBatchCostsAboutAStampPair) {
-    Pure          p;
-    std::uint64_t ticks = plumb::detail::run_batch<Pure, PureOp>(p, 0);
-    EXPECT_LT(ticks, 10'000u);
+    Pure   p;
+    double ticks = plumb::detail::run_batch<Pure, PureOp>(p, 0);
+    EXPECT_LT(ticks, 10'000);
+}
+
+namespace {
+
+constexpr auto measured_op = [](Counter& c) {
+    ++c.calls;
+    return plumb::Measured{std::chrono::duration<double, std::nano>{2.5}};
+};
+
+using MeasuredOp = decltype(measured_op);
+
+}  // namespace
+
+TEST(Batch, MeasuredBatchSumsItsOpsOwnTimes) {
+    Counter c;
+    EXPECT_EQ((plumb::detail::run_batch<Counter, MeasuredOp>(c, 4)), 10.0);
+    EXPECT_EQ(c.calls, 4u);
 }
 
 namespace {
@@ -83,8 +101,15 @@ constexpr plumb::detail::Warmup no_warmup{.time = {}, .batches = 0};
 TEST(Batches, RunsCountBatchesOfN) {
     auto b = plumb::detail::run_batches<Counter, CountOp>(plumb::keep, 10, 5, no_warmup);
     EXPECT_EQ(b.n, 10u);
-    ASSERT_EQ(b.ticks.size(), 5u);
-    for (auto t : b.ticks) EXPECT_GT(t, 0u);
+    EXPECT_FALSE(b.measured);
+    ASSERT_EQ(b.figures.size(), 5u);
+    for (auto t : b.figures) EXPECT_GT(t, 0);
+}
+
+TEST(Batches, MeasuredBatchesAreMarked) {
+    auto b = plumb::detail::run_batches<Counter, MeasuredOp>(plumb::keep, 4, 3, no_warmup);
+    EXPECT_TRUE(b.measured);
+    EXPECT_EQ(b.figures, (std::vector<double>{10.0, 10.0, 10.0}));
 }
 
 TEST(Batches, DefaultResetRebuildsBetweenBatches) {
@@ -113,7 +138,7 @@ TEST(Batches, WarmupRunsItsBatchesUncounted) {
     Tracked::start();
     auto b = plumb::detail::run_batches<Tracked, TrackedOp>(plumb::keep, 3, 2,
                                                             {.time = {}, .batches = 5});
-    EXPECT_EQ(b.ticks.size(), 2u);
+    EXPECT_EQ(b.figures.size(), 2u);
     EXPECT_EQ(Tracked::ops, (5u + 2u) * 3u);
 }
 

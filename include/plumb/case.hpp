@@ -51,6 +51,11 @@ Case op(Name name, O, Options<F> opts = {}) {
                   "op must be a lambda with no captures");
     static_assert(std::invocable<const O&, F&>,
                   detail::about("op must be callable with the fixture: ", ^^F));
+    if constexpr (std::invocable<const O&, F&>) {
+        using R = std::invoke_result_t<const O&, F&>;
+        static_assert(std::is_void_v<R> || std::same_as<R, Measured>,
+                      "op must return void or plumb::Measured, keep a value with plumb::sink");
+    }
     return detail::make_case(detail::entry<F, O>(name.value, opts.max_batch.value, opts.reset));
 }
 

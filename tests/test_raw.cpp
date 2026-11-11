@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include "plumb/raw.hpp"
 
@@ -44,14 +45,15 @@ TEST(Raw, ConvertsTicksToNs) {
     auto b = plumb::detail::run_batches<Counter, decltype(count_op)>(plumb::keep, 8, 16, no_warmup);
     auto raw = plumb::to_raw(b, clock, false);
 
-    EXPECT_EQ(raw.header.version, 1u);
+    EXPECT_EQ(raw.header.version, 2u);
     EXPECT_EQ(raw.header.tsc_invariant, 0u);
+    EXPECT_EQ(raw.header.measured, 0u);
     EXPECT_EQ(raw.header.n, 8u);
     EXPECT_EQ(raw.header.count, 16u);
     EXPECT_DOUBLE_EQ(raw.header.ghz, clock.ghz());
     ASSERT_EQ(raw.ns.size(), 16u);
     for (std::size_t i = 0; i < raw.ns.size(); ++i)
-        EXPECT_DOUBLE_EQ(raw.ns[i], static_cast<double>(b.ticks[i]) / clock.ghz());
+        EXPECT_DOUBLE_EQ(raw.ns[i], b.figures[i] / clock.ghz());
 
     double g = clock.ghz();
     EXPECT_EQ(raw.header.stamp_count, b.stamp_cost.count());
@@ -59,6 +61,17 @@ TEST(Raw, ConvertsTicksToNs) {
     EXPECT_DOUBLE_EQ(raw.header.stamp_max, b.stamp_cost.max() / g);
     EXPECT_DOUBLE_EQ(raw.header.stamp_mean, b.stamp_cost.mean() / g);
     EXPECT_DOUBLE_EQ(raw.header.stamp_variance, b.stamp_cost.variance() / (g * g));
+}
+
+TEST(Raw, KeepsAMeasuredOpsOwnNs) {
+    constexpr auto op = [](Counter&) {
+        return plumb::Measured{std::chrono::duration<double, std::nano>{1.5}};
+    };
+    auto clock = plumb::TscClock::at(3.0);
+    auto b     = plumb::detail::run_batches<Counter, decltype(op)>(plumb::keep, 2, 4, no_warmup);
+    auto raw   = plumb::to_raw(b, clock, true);
+    EXPECT_EQ(raw.header.measured, 1u);
+    EXPECT_EQ(raw.ns, (std::vector<double>{3.0, 3.0, 3.0, 3.0}));
 }
 
 TEST(Raw, RoundTrips) {

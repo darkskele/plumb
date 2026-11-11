@@ -31,8 +31,9 @@ struct Abandon {
     Abandon() { plumb::abandon("rig not ready"); }
 };
 
-const plumb::Case void_fine    = plumb::op<Fine>("void_fine", [](Fine& f) { return ++f.count; });
-const plumb::Case void_flaky   = plumb::op<Flaky>("void_flaky", [](Flaky& f) { return ++f.count; });
+const plumb::Case void_fine = plumb::op<Fine>("void_fine", [](Fine& f) { plumb::sink(++f.count); });
+const plumb::Case void_flaky =
+    plumb::op<Flaky>("void_flaky", [](Flaky& f) { plumb::sink(++f.count); });
 const plumb::Case void_crash   = plumb::op<Crash>("void_crash", [](Crash&) {});
 const plumb::Case void_abandon = plumb::op<Abandon>("void_abandon", [](Abandon&) {});
 

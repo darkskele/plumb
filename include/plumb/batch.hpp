@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
@@ -19,30 +20,29 @@ inline void opaque(T& x) noexcept {
     asm volatile("" : "+r"(x) : : "memory");
 }
 
-/// @brief Makes the optimiser assume `x` was read here.
-template <class T>
-inline void sink(const T& x) noexcept {
-    asm volatile("" : : "r,m"(x) : "memory");
-}
+/// @brief Whether the op returns its own time.
+template <class O, class F>
+inline constexpr bool self_measured = std::same_as<std::invoke_result_t<const O&, F&>, Measured>;
 
-/// @brief Ticks for `n` calls of the op on `fixture`, between one stamp pair.
+/// @brief The figure for `n` calls of the op on `fixture`. Ticks between one stamp pair, or the
+/// sum of a measured op's own nanoseconds.
 /// @tparam F The fixture type.
 /// @tparam O The op type.
-/// @todo An op returning `plumb::Measured` takes its own samples.
 template <Fixture F, Op<F> O>
-[[gnu::noinline, gnu::aligned(64)]] std::uint64_t run_batch(F& fixture, std::size_t n) noexcept {
+[[gnu::noinline, gnu::aligned(64)]] double run_batch(F& fixture, std::size_t n) noexcept {
     F* f = &fixture;
     opaque(f);
     opaque(n);
-    auto t0 = TscClock::now();
-    for (std::size_t i = 0; i < n; ++i) {
-        if constexpr (std::is_void_v<std::invoke_result_t<const O&, F&>>)
-            O{}(*f);
-        else
-            sink(O{}(*f));
+    if constexpr (self_measured<O, F>) {
+        double ns = 0;
+        for (std::size_t i = 0; i < n; ++i) ns += O{}(*f).ns.count();
+        return ns;
+    } else {
+        auto t0 = TscClock::now();
+        for (std::size_t i = 0; i < n; ++i) O{}(*f);
+        auto t1 = TscClock::now();
+        return static_cast<double>(t1 - t0);
     }
-    auto t1 = TscClock::now();
-    return t1 - t0;
 }
 
 /// @brief Batches run before the counted ones, until both the time and the count have passed.
@@ -51,11 +51,13 @@ struct Warmup {
     std::size_t              batches = 10;
 };
 
-/// @brief One repetition's raw record. The ticks of each batch of `n` ops, and the stamp cost.
+/// @brief One repetition's raw record. A figure per batch of `n` ops, and the stamp cost.
+/// Figures are ticks, or nanoseconds when `measured`.
 struct Batches {
-    std::size_t                n;
-    Summary                    stamp_cost;
-    std::vector<std::uint64_t> ticks;
+    std::size_t         n;
+    bool                measured;
+    Summary             stamp_cost;
+    std::vector<double> figures;
 };
 
 /// @brief Reads per stamp cost measurement.
@@ -81,9 +83,12 @@ Batches run_batches(Reset<F> reset, std::size_t n, std::size_t count, Warmup war
     for (std::size_t done = 0; done < warmup.batches || steady::now() - start < warmup.time; ++done)
         (void)batch();
 
-    Batches out{.n = n, .stamp_cost = TscClock::stamp_cost(stamp_reads), .ticks = {}};
-    out.ticks.reserve(count);
-    for (std::size_t i = 0; i < count; ++i) out.ticks.push_back(batch());
+    Batches out{.n          = n,
+                .measured   = self_measured<O, F>,
+                .stamp_cost = TscClock::stamp_cost(stamp_reads),
+                .figures    = {}};
+    out.figures.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) out.figures.push_back(batch());
     return out;
 }
 
