@@ -114,8 +114,12 @@ TEST(Cli, RunOptionsInAnyOrder) {
 }
 
 TEST(Cli, RunNeedsAName) {
-    expect_refused({"--run"}, "--run needs a case name");
-    expect_refused({"--run", "--in-process"}, "--run needs a case name");
+    expect_refused({"--run"}, "--run needs a pattern");
+    expect_refused({"--run", "--in-process"}, "--run needs a pattern");
+}
+
+TEST(Cli, RunPatternIsARegex) {
+    expect_refused({"--run", "push_("}, "--run push_( is not a regex");
 }
 
 TEST(Cli, RunGivenOnce) { expect_refused({"--run", "a", "--run", "b"}, "--run given twice"); }
@@ -141,7 +145,13 @@ TEST(Cli, RunUnknownCaseStops) {
     auto c = run(two_cases(), {"--run", "push_c"});
     EXPECT_EQ(c.code, 1);
     EXPECT_EQ(c.out, "");
-    EXPECT_EQ(c.err, "plumb: no case named push_c\n");
+    EXPECT_EQ(c.err, "plumb: no case matches push_c\n");
+}
+
+TEST(Cli, RunPatternMatchesWholeNames) {
+    auto c = run(two_cases(), {"--run", "push"});
+    EXPECT_EQ(c.code, 1);
+    EXPECT_EQ(c.err, "plumb: no case matches push\n");
 }
 
 TEST(Cli, RunWithNoCasesStops) {
@@ -205,6 +215,17 @@ TEST(Cli, RunOneCase) {
     EXPECT_EQ(c.out.find("count_a"), std::string::npos) << c.out;
     EXPECT_TRUE(std::filesystem::exists(dir / "count_b.raw"));
     EXPECT_FALSE(std::filesystem::exists(dir / "count_a.raw"));
+}
+
+TEST(Cli, RunEveryCaseThePatternMatches) {
+    plumb::Registry r = counters();
+    r.add(plumb::detail::entry<Counter, decltype(count_op)>("tally_a", 1, plumb::keep));
+    auto dir = fresh_dir("plumb_cli_pattern");
+    auto c   = run(r, {"--in-process", "--run", "count_.*", "--out", dir.string()});
+    ASSERT_EQ(c.code, 0) << c.err;
+    EXPECT_NE(c.out.find("\ncount_a "), std::string::npos) << c.out;
+    EXPECT_NE(c.out.find("\ncount_b "), std::string::npos) << c.out;
+    EXPECT_EQ(c.out.find("tally_a"), std::string::npos) << c.out;
 }
 
 TEST(Cli, RunReportsADirectoryItCannotMake) {

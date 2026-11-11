@@ -7,9 +7,11 @@
 #include <cstdio>
 #include <expected>
 #include <filesystem>
+#include <format>
 #include <optional>
 #include <print>
 #include <random>
+#include <regex>
 #include <span>
 #include <string>
 #include <string_view>
@@ -63,10 +65,15 @@ inline std::expected<Command, std::string> parse(std::span<const std::string_vie
                 return std::unexpected("one command at a time");
             c.name = args[++i];
         } else if (a == "--run") {
-            if (!value(i)) return std::unexpected("--run needs a case name");
+            if (!value(i)) return std::unexpected("--run needs a pattern");
             if (run_named) return std::unexpected("--run given twice");
             c.name    = args[++i];
             run_named = true;
+            try {
+                std::regex{std::string(c.name)};
+            } catch (const std::regex_error&) {
+                return std::unexpected(std::format("--run {} is not a regex", c.name));
+            }
         } else if (a == "--in-process") {
             c.in_process = true;
         } else if (a == "--out") {
@@ -115,7 +122,7 @@ inline int run(std::span<const std::string_view> args, const Registry& r, std::F
     if (!command) {
         std::println(err, "plumb: {}", command.error());
         std::println(
-            err, "usage: [--run NAME] [--in-process] [--seed S] [--out DIR] | --list | --check");
+            err, "usage: [--run PATTERN] [--in-process] [--seed S] [--out DIR] | --list | --check");
         return 2;
     }
 
@@ -137,14 +144,15 @@ inline int run(std::span<const std::string_view> args, const Registry& r, std::F
     }
 
     if (command->kind == Command::Kind::run) {
+        std::regex pattern{command->name.empty() ? ".*" : std::string(command->name)};
         std::vector<const Entry*> cases;
         for (const Entry& e : r.entries())
-            if (command->name.empty() || e.name == command->name) cases.push_back(&e);
+            if (std::regex_match(e.name.begin(), e.name.end(), pattern)) cases.push_back(&e);
         if (cases.empty()) {
             if (command->name.empty())
                 std::println(err, "plumb: no cases registered");
             else
-                std::println(err, "plumb: no case named {}", command->name);
+                std::println(err, "plumb: no case matches {}", command->name);
             return 1;
         }
         std::ranges::sort(cases, {}, &Entry::name);
