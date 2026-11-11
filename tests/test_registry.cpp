@@ -61,7 +61,7 @@ TEST(Registry, EntryRunsItsCase) {
     EXPECT_EQ(e.max_batch, 4u);
     auto b = e.batches(4, 3, no_warmup);
     EXPECT_EQ(b.n, 4u);
-    EXPECT_EQ(b.ticks.size(), 3u);
+    EXPECT_EQ(b.figures.size(), 3u);
 }
 
 TEST(Registry, EntryKeepsItsReset) {

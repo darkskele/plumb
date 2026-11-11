@@ -55,6 +55,16 @@ TEST(Run, SlowOpStopsDoublingPastTheBatchTarget) {
     EXPECT_EQ(c.plan.count, plumb::detail::count_for(c.batch_ns));
 }
 
+// Its own time is 1us, however long the call takes.
+constexpr auto measured_op = [](Counter&) { return plumb::Measured{1us}; };
+
+TEST(Run, MeasuredOpIsSizedByItsOwnTime) {
+    auto clock = plumb::TscClock::at(3.0);
+    auto e     = plumb::detail::entry<Counter, decltype(measured_op)>("measured", 64, plumb::keep);
+    EXPECT_EQ(plumb::size(e, clock),
+              (plumb::Calibration{.plan = {.n = 8, .count = 125'000}, .batch_ns = 8'000}));
+}
+
 namespace {
 
 plumb::Raw raw_of(double stamp_mean, double stamp_variance, std::vector<double> ns) {

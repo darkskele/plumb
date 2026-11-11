@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <concepts>
 #include <memory>
 #include <meta>
@@ -14,10 +15,24 @@ template <class F>
 concept Fixture = std::is_object_v<F> && !std::is_const_v<F> && std::default_initializable<F> &&
                   std::is_nothrow_destructible_v<F>;
 
-/// @brief What a case measures. A lambda with no captures, called with the fixture.
+/// @brief An op's own time for one call, taken on a clock the op chooses.
+struct Measured {
+    std::chrono::duration<double, std::nano> ns;
+};
+
+/// @brief Makes the optimiser assume `x` was read here, so the work that made it stays.
+template <class T>
+inline void sink(const T& x) noexcept {
+    asm volatile("" : : "r,m"(x) : "memory");
+}
+
+/// @brief What a case measures. A lambda with no captures, called with the fixture, returning
+/// nothing or its own time.
 template <class O, class F>
 concept Op = Fixture<F> && std::is_empty_v<O> && std::default_initializable<O> &&
-             std::invocable<const O&, F&>;
+             std::invocable<const O&, F&> &&
+             (std::is_void_v<std::invoke_result_t<const O&, F&>> ||
+              std::same_as<std::invoke_result_t<const O&, F&>, Measured>);
 
 /// @brief A reset that leaves the fixture as the last batch left it.
 inline constexpr auto keep = [](Fixture auto&) noexcept {};

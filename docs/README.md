@@ -15,11 +15,11 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~Tests, a project's settings and the like only when top level. A consumer adds it with `if(NOT TARGET plumb::plumb)`, as halln adds cds.~~
     - [x] ~~`CLAUDE.md`, `README.md`, `docs/` with the milestones.~~
     - [x] ~~devenv: `vscode/plumb/` tasks and launches, `wt adopt`, the pre-commit hook.~~
-- [ ] 2. Registry and case API. Done when cases in two files list together and a duplicate stops the binary.
+- [x] ~~2. Registry and case API. Done when cases in two files list together and a duplicate stops the binary.~~
     - [x] ~~`plumb::Case`, `plumb::op<Fixture>(name, op, Options)`, `Options{max_batch, reset}`.~~
-    - [ ] Compile-time checks: name characters, `max_batch` at least one, what the op returns, a `reset` that fits the fixture. Each proven by a source that must fail to compile with its message.
+    - [x] ~~Compile-time checks: name characters, `max_batch` at least one, what the op returns, a `reset` that fits the fixture. Each proven by a source that must fail to compile with its message.~~
         - [x] ~~Name characters, `max_batch` at least one, a `reset` that fits the fixture, a fixture built with no arguments and destroyed without throwing, an op with no captures that takes the fixture.~~
-        - [ ] What the op returns, once `plumb::Measured` exists in step 4.
+        - [x] ~~What the op returns: nothing, or `plumb::Measured`. A value is kept with `plumb::sink`.~~
     - [x] ~~Registry as a function-local static in an inline function. Duplicate names refused at startup.~~
     - [x] ~~`plumb::main` with `--list` and `--check`.~~
     - [x] ~~`plumb_add_bench`. A duplicate name fails the build. Debug builds link with LTO, so two types sharing a name across files fail the link.~~
@@ -31,9 +31,10 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~Warmup by time and count.~~
     - [x] ~~Raw sample writer, f64 ns behind a header.~~
     - [x] ~~`--run NAME --in-process`. A TSC that is not invariant is warned of and the run carries on.~~
-- [ ] 4. Measured. Done when a case whose op returns `plumb::Measured` gives one sample per op, with the wall time beside it.
-    - [ ] `plumb::Measured`, TSC ticks the op took from plumb's clock.
-    - [ ] Each op of a batch its own sample. The `wall` figure beside it.
+- [x] ~~4. Measured. Done when a case whose op returns `plumb::Measured` gives its own times as its figures.~~
+    - [x] ~~`plumb::Measured`, the op's own time as a duration in nanoseconds, from any clock.~~
+    - [x] ~~A measured batch's figure is the sum of its ops' own times. `max_batch = 1` gives one per op.~~
+    - [x] ~~The raw file marks a measured case. Raw version 2.~~
 - [x] ~~5. Parent and plan. Done when a full run of two cases leaves one raw file per repetition and survives a case that crashes.~~
     - [x] ~~The TSC rate measured once by the parent, given to every child.~~
     - [x] ~~Calibration child per case: batch size against the target time, sample count against the time cap.~~

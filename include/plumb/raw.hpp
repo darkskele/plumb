@@ -22,6 +22,8 @@ struct RawHeader {
     std::array<char, 8> magic;
     std::uint32_t       version;
     std::uint32_t       tsc_invariant;
+    std::uint32_t       measured;
+    std::uint32_t       reserved;
     std::uint64_t       n;
     std::uint64_t       count;
     double              ghz;
@@ -35,11 +37,11 @@ struct RawHeader {
 };
 
 static_assert(std::is_trivially_copyable_v<RawHeader>);
-static_assert(sizeof(RawHeader) == 80, "the raw header layout changed, bump raw_version");
+static_assert(sizeof(RawHeader) == 88, "the raw header layout changed, bump raw_version");
 static_assert(std::endian::native == std::endian::little);
 
 inline constexpr std::array<char, 8> raw_magic   = {'p', 'l', 'u', 'm', 'b', 'r', 'a', 'w'};
-inline constexpr std::uint32_t       raw_version = 1;
+inline constexpr std::uint32_t       raw_version = 2;
 
 /// @brief One repetition's raw file: the header, then nanoseconds per batch.
 struct Raw {
@@ -49,14 +51,16 @@ struct Raw {
     bool operator==(const Raw&) const = default;
 };
 
-/// @brief A repetition's batches in nanoseconds, at the clock's rate. Nothing subtracted.
+/// @brief A repetition's batches in nanoseconds, ticks at the clock's rate. Nothing subtracted.
 inline Raw to_raw(const detail::Batches& b, const TscClock& clock, bool invariant) {
     double g = clock.ghz();
     Raw    raw{.header = {.magic          = raw_magic,
                           .version        = raw_version,
                           .tsc_invariant  = invariant ? 1u : 0u,
+                          .measured       = b.measured ? 1u : 0u,
+                          .reserved       = 0,
                           .n              = b.n,
-                          .count          = b.ticks.size(),
+                          .count          = b.figures.size(),
                           .ghz            = g,
                           .stamp_count    = b.stamp_cost.count(),
                           .stamp_min      = b.stamp_cost.min() / g,
@@ -64,8 +68,8 @@ inline Raw to_raw(const detail::Batches& b, const TscClock& clock, bool invarian
                           .stamp_mean     = b.stamp_cost.mean() / g,
                           .stamp_variance = b.stamp_cost.variance() / (g * g)},
                .ns     = {}};
-    raw.ns.reserve(b.ticks.size());
-    for (std::uint64_t t : b.ticks) raw.ns.push_back(static_cast<double>(t) / g);
+    raw.ns.reserve(b.figures.size());
+    for (double f : b.figures) raw.ns.push_back(b.measured ? f : f / g);
     return raw;
 }
 

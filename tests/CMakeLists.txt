@@ -14,8 +14,8 @@ endfunction()
 
 # Cases in two files, each with its own fixture named Push, list together.
 plumb_add_bench(plumb_selftest selftest/bench_a.cpp selftest/bench_b.cpp)
-add_test(NAME plumb_selftest_lists_both COMMAND plumb_selftest --list)
-set_tests_properties(plumb_selftest_lists_both PROPERTIES PASS_REGULAR_EXPRESSION "^selftest_a\nselftest_b\n$")
+add_test(NAME plumb_selftest_lists_every_case COMMAND plumb_selftest --list)
+set_tests_properties(plumb_selftest_lists_every_case PROPERTIES PASS_REGULAR_EXPRESSION "^selftest_a\nselftest_b\nselftest_m\n$")
 
 # With no command the bench binary runs every case through the parent, each repetition its own process.
 add_test(NAME plumb_selftest_runs_every_case

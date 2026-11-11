@@ -38,8 +38,9 @@ inline std::size_t count_for(double batch_ns) pre(batch_ns > 0) {
 
 /// @brief The fastest of a few batches of `n` ops, in nanoseconds.
 inline double fastest_batch_ns(const Entry& e, std::size_t n, const TscClock& clock) {
-    auto b = e.batches(n, 5, {.time = {}, .batches = 1});
-    return clock.ns(static_cast<std::int64_t>(std::ranges::min(b.ticks)));
+    auto   b       = e.batches(n, 5, {.time = {}, .batches = 1});
+    double fastest = std::ranges::min(b.figures);
+    return b.measured ? fastest : fastest / clock.ghz();
 }
 
 }  // namespace detail

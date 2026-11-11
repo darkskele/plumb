@@ -13,6 +13,6 @@ int touch_a() {
 
 namespace {
 
-const plumb::Case odr_a = plumb::op<Push>("odr_a", [](Push& f) { return ++f.count; });
+const plumb::Case odr_a = plumb::op<Push>("odr_a", [](Push& f) { plumb::sink(++f.count); });
 
 }  // namespace

@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <chrono>
 #include <concepts>
 
 #include "plumb/plumb.hpp"
@@ -21,10 +22,13 @@ struct ThrowingDtor {
     ~ThrowingDtor() noexcept(false) {}
 };
 
-constexpr auto push       = [](Push& f) { return ++f.count; };
-constexpr auto void_op    = [](Push& f) { ++f.count; };
-constexpr auto other_op   = [](Other&) {};
-constexpr auto generic_op = [](auto& f) { return f.count; };
+constexpr auto push        = [](Push& f) { plumb::sink(++f.count); };
+constexpr auto void_op     = [](Push& f) { ++f.count; };
+constexpr auto other_op    = [](Other&) {};
+constexpr auto generic_op  = [](auto& f) { plumb::sink(f.count); };
+constexpr auto measured_op = [](Push&) { return plumb::Measured{std::chrono::microseconds{1}}; };
+constexpr auto value_op    = [](Push& f) { return ++f.count; };
+constexpr auto ticks_op    = [](Push&) { return std::chrono::nanoseconds{1}; };
 
 int  captured  = 0;
 auto capturing = [&c = captured](Push&) { ++c; };
@@ -38,6 +42,9 @@ static_assert(!plumb::Fixture<const Push>);
 static_assert(plumb::Op<decltype(push), Push>);
 static_assert(plumb::Op<decltype(void_op), Push>);
 static_assert(plumb::Op<decltype(generic_op), Push>);
+static_assert(plumb::Op<decltype(measured_op), Push>);
+static_assert(!plumb::Op<decltype(value_op), Push>);
+static_assert(!plumb::Op<decltype(ticks_op), Push>);
 static_assert(!plumb::Op<decltype(other_op), Push>);
 static_assert(!plumb::Op<decltype(capturing), Push>);
 
