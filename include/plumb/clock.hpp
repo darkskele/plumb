@@ -54,6 +54,9 @@ class TscClock {
         return TscClock{static_cast<double>(ticks1 - ticks0) / ns};
     }
 
+    /// @brief A clock at a rate measured before, in ticks per nanosecond.
+    [[nodiscard]] static TscClock at(double ghz) pre(ghz > 0) { return TscClock{ghz}; }
+
     /// @brief Nanoseconds in a signed tick count.
     [[nodiscard]] double ns(std::int64_t ticks) const noexcept {
         return static_cast<double>(ticks) / ticks_per_ns_;

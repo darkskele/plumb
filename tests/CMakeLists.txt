@@ -17,9 +17,14 @@ plumb_add_bench(plumb_selftest selftest/bench_a.cpp selftest/bench_b.cpp)
 add_test(NAME plumb_selftest_lists_both COMMAND plumb_selftest --list)
 set_tests_properties(plumb_selftest_lists_both PROPERTIES PASS_REGULAR_EXPRESSION "^selftest_a\nselftest_b\n$")
 
-# With no command the bench binary runs every case and prints a row for each.
-add_test(NAME plumb_selftest_runs_every_case COMMAND plumb_selftest --out ${CMAKE_CURRENT_BINARY_DIR}/selftest_run)
-set_tests_properties(plumb_selftest_runs_every_case PROPERTIES PASS_REGULAR_EXPRESSION "\nselftest_a +64 [^\n]*\nselftest_b +1 ")
+# With no command the bench binary runs every case through the parent, each repetition its own process.
+add_test(NAME plumb_selftest_runs_every_case
+    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/selftest/parent.sh $<TARGET_FILE:plumb_selftest> ${CMAKE_CURRENT_BINARY_DIR}/selftest_run)
+
+# Cases that crash or abandon are void and rerun, and a case void three times is dropped.
+plumb_add_bench(plumb_selftest_void selftest_void/bench.cpp)
+add_test(NAME plumb_selftest_voids_and_reruns
+    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/selftest_void/check.sh $<TARGET_FILE:plumb_selftest_void> ${CMAKE_CURRENT_BINARY_DIR}/selftest_void)
 
 # One name in two files stops the binary before anything runs.
 add_executable(plumb_selftest_dup selftest_dup/bench_a.cpp selftest_dup/bench_b.cpp)

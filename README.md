@@ -12,7 +12,7 @@ A bench platform for C++ repos. It measures how fast code is and how far that nu
 Measurement
 - Warm and alone, on a known core of a known machine. How code behaves in a deployment is measured elsewhere.
 - The timed code is the code a caller runs. The op inlines into the timed loop, the fixture is opaque to the optimiser and the batch count is a runtime value.
-- An interval near the cost of a stamp is never reported as a result.
+- The stamp cost is reported beside every result, never used to void one.
 - Every repetition is its own process, so layout luck shows as spread and is never mistaken for a change.
 
 Judgement
