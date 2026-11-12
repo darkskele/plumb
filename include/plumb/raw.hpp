@@ -17,12 +17,15 @@
 
 namespace plumb {
 
-/// @brief The fixed start of a raw file. Stamp cost figures are in nanoseconds.
+/// @brief The fixed start of a raw file. Stamp cost figures are in nanoseconds. The CPU before the
+/// first batch and after the last, -1 when unknown.
 struct RawHeader {
     std::array<char, 8> magic;
     std::uint32_t       version;
     std::uint32_t       tsc_invariant;
     std::uint32_t       measured;
+    std::int32_t        cpu_start;
+    std::int32_t        cpu_end;
     std::uint32_t       reserved;
     std::uint64_t       n;
     std::uint64_t       count;
@@ -37,11 +40,12 @@ struct RawHeader {
 };
 
 static_assert(std::is_trivially_copyable_v<RawHeader>);
-static_assert(sizeof(RawHeader) == 88, "the raw header layout changed, bump raw_version");
-static_assert(std::endian::native == std::endian::little);
+static_assert(sizeof(RawHeader) == 96, "the raw header layout changed, bump raw_version");
+static_assert(std::endian::native == std::endian::little,
+              "raw files are written in native byte order, which must be little-endian");
 
 inline constexpr std::array<char, 8> raw_magic   = {'p', 'l', 'u', 'm', 'b', 'r', 'a', 'w'};
-inline constexpr std::uint32_t       raw_version = 2;
+inline constexpr std::uint32_t       raw_version = 3;
 
 /// @brief One repetition's raw file: the header, then nanoseconds per batch.
 struct Raw {
@@ -58,6 +62,8 @@ inline Raw to_raw(const detail::Batches& b, const TscClock& clock, bool invarian
                           .version        = raw_version,
                           .tsc_invariant  = invariant ? 1u : 0u,
                           .measured       = b.measured ? 1u : 0u,
+                          .cpu_start      = b.cpu_start,
+                          .cpu_end        = b.cpu_end,
                           .reserved       = 0,
                           .n              = b.n,
                           .count          = b.figures.size(),

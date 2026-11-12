@@ -31,6 +31,7 @@ struct Command {
     Kind                         kind;
     std::string_view             name       = {};
     bool                         in_process = false;
+    bool                         keep_raw   = false;
     std::filesystem::path        out        = {};
     std::size_t                  n          = 0;
     std::size_t                  count      = 0;
@@ -76,6 +77,8 @@ inline std::expected<Command, std::string> parse(std::span<const std::string_vie
             }
         } else if (a == "--in-process") {
             c.in_process = true;
+        } else if (a == "--keep-raw") {
+            c.keep_raw = true;
         } else if (a == "--out") {
             if (!value(i)) return std::unexpected("--out needs a path");
             c.out = args[++i];
@@ -98,8 +101,8 @@ inline std::expected<Command, std::string> parse(std::span<const std::string_vie
     }
 
     using enum Command::Kind;
-    if (c.kind != run && (run_named || c.in_process))
-        return std::unexpected("--run and --in-process go only with a run");
+    if (c.kind != run && (run_named || c.in_process || c.keep_raw))
+        return std::unexpected("--run, --in-process and --keep-raw go only with a run");
     if ((c.kind == list || c.kind == check) && !c.out.empty())
         return std::unexpected("--out goes only with a run");
     if (c.kind != child && (c.n != 0 || c.count != 0))
@@ -122,7 +125,9 @@ inline int run(std::span<const std::string_view> args, const Registry& r, std::F
     if (!command) {
         std::println(err, "plumb: {}", command.error());
         std::println(
-            err, "usage: [--run PATTERN] [--in-process] [--seed S] [--out DIR] | --list | --check");
+            err,
+            "usage: [--run PATTERN] [--in-process] [--keep-raw] [--seed S] [--out DIR] | --list | "
+            "--check");
         return 2;
     }
 
@@ -158,10 +163,11 @@ inline int run(std::span<const std::string_view> args, const Registry& r, std::F
         std::ranges::sort(cases, {}, &Entry::name);
         auto dir = command->out.empty() ? detail::default_out(std::chrono::system_clock::now())
                                         : command->out;
-        if (command->in_process) return run_in_process(cases, dir, out, err);
+        if (command->in_process) return run_in_process(cases, dir, command->keep_raw, out, err);
         std::random_device random;
         auto seed = command->seed.value_or((std::uint64_t{random()} << 32) | random());
-        return run_parent(cases, detail::self(), dir, seed, detail::default_rounds, out, err);
+        return run_parent(cases, detail::self(), dir, seed, detail::default_rounds,
+                          command->keep_raw, out, err);
     }
 
     if (command->kind == Command::Kind::list) {

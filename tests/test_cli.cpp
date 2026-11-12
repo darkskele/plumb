@@ -14,6 +14,7 @@
 #include "plumb/cli.hpp"
 #include "plumb/plan.hpp"
 #include "plumb/raw.hpp"
+#include "plumb/results.hpp"
 
 namespace {
 
@@ -126,8 +127,15 @@ TEST(Cli, RunGivenOnce) { expect_refused({"--run", "a", "--run", "b"}, "--run gi
 
 TEST(Cli, OutNeedsAPath) { expect_refused({"--out"}, "--out needs a path"); }
 
+TEST(Cli, ParsesKeepRaw) {
+    auto c = parse({"--keep-raw"});
+    ASSERT_TRUE(c) << c.error();
+    EXPECT_EQ(*c, (plumb::Command{.kind = Kind::run, .keep_raw = true}));
+}
+
 TEST(Cli, RunOptionsOnlyWithARun) {
     expect_refused({"--list", "--in-process"}, "only with a run");
+    expect_refused({"--list", "--keep-raw"}, "only with a run");
     expect_refused({"--check", "--out", "runs/a"}, "only with a run");
     expect_refused({"--list", "--run", "push_a"}, "only with a run");
 }
@@ -185,7 +193,7 @@ std::filesystem::path fresh_dir(std::string_view name) {
 
 TEST(Cli, RunsEveryCaseIntoOneTable) {
     auto dir = fresh_dir("plumb_cli_all");
-    auto c   = run(counters(), {"--in-process", "--out", dir.string()});
+    auto c   = run(counters(), {"--in-process", "--keep-raw", "--out", dir.string()});
     ASSERT_EQ(c.code, 0) << c.err;
     EXPECT_NE(c.out.find("ns per op"), std::string::npos) << c.out;
     EXPECT_EQ(c.out.find('\x1b'), std::string::npos) << c.out;
@@ -209,12 +217,47 @@ TEST(Cli, RunsEveryCaseIntoOneTable) {
 
 TEST(Cli, RunOneCase) {
     auto dir = fresh_dir("plumb_cli_one");
-    auto c   = run(counters(), {"--in-process", "--run", "count_b", "--out", dir.string()});
+    auto c =
+        run(counters(), {"--in-process", "--keep-raw", "--run", "count_b", "--out", dir.string()});
     ASSERT_EQ(c.code, 0) << c.err;
     EXPECT_NE(c.out.find("\ncount_b "), std::string::npos) << c.out;
     EXPECT_EQ(c.out.find("count_a"), std::string::npos) << c.out;
     EXPECT_TRUE(std::filesystem::exists(dir / "count_b.raw"));
     EXPECT_FALSE(std::filesystem::exists(dir / "count_a.raw"));
+}
+
+TEST(Cli, RunWritesItsResults) {
+    auto dir    = fresh_dir("plumb_cli_results");
+    auto before = std::chrono::system_clock::now();
+    auto c      = run(counters(), {"--in-process", "--out", dir.string()});
+    ASSERT_EQ(c.code, 0) << c.err;
+    auto r = plumb::read_results(dir / "results.bin");
+    ASSERT_TRUE(r) << r.error();
+    EXPECT_GT(r->ghz, 0);
+    EXPECT_EQ(r->rounds, 1u);
+    EXPECT_GE(
+        r->start_ns,
+        std::chrono::duration_cast<std::chrono::nanoseconds>(before.time_since_epoch()).count());
+    ASSERT_EQ(r->cases.size(), 2u);
+    EXPECT_EQ(r->cases[0].name, "count_a");
+    EXPECT_EQ(r->cases[1].name, "count_b");
+    for (const auto& k : r->cases) {
+        EXPECT_FALSE(k.dropped);
+        EXPECT_TRUE(k.voids.empty());
+        ASSERT_EQ(k.reps.size(), 1u);
+        EXPECT_EQ(k.reps[0].header.count, k.calibration.plan.count);
+        EXPECT_EQ(k.reps[0].histogram.count(), k.calibration.plan.count);
+    }
+    EXPECT_EQ(r->cases[0].calibration.plan.n, 64u);
+}
+
+TEST(Cli, RawFilesGoUnlessKept) {
+    auto dir = fresh_dir("plumb_cli_no_raw");
+    auto c   = run(counters(), {"--in-process", "--out", dir.string()});
+    ASSERT_EQ(c.code, 0) << c.err;
+    EXPECT_NE(c.out.find("\ncount_a "), std::string::npos) << c.out;
+    EXPECT_FALSE(std::filesystem::exists(dir / "count_a.raw"));
+    EXPECT_FALSE(std::filesystem::exists(dir / "count_b.raw"));
 }
 
 TEST(Cli, RunEveryCaseThePatternMatches) {

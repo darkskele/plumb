@@ -5,42 +5,32 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
 ## [plumb](docs/README.md)
 
 - [ ] 0. Before plumb exists
-    - [ ] halln `feature/rigStability` lands as it is. Its `diff.py` and `noise.py` are the reference for step 11.
-    - [ ] cds `feature/benchInfra` does not land its `benchmarks/support` headers (`tsc.hpp`, `histogram.hpp`, `build_info.hpp`) or the latency harness in cds. They seed plumb in steps 3 and 7. Its `pin.hpp` stays in cds for fixtures that start threads. Its `tools/bench` changes may land, they are retired in step 13.
-- [ ] 6. A/A. Done when an `--aa` run leaves both arms' raw files for every round.
-    - [ ] `--aa`: two arms of the same build per round, each repetition its own process.
-- [ ] 7. Results. Done when two runs of the same build give binary results files, and console tables a person can compare by eye.
-    - [ ] One binary results file per run, schema version 1. Figures and histograms, no samples.
-    - [ ] Each repetition folded in as it ends: its own min, p50, p90, p99 and max exact from its samples, its samples into the case's histogram, its raw file deleted unless `--keep-raw`.
-    - [ ] Per case: count, min, p50, p90, p99 and max from the histogram, drift windows, log-linear histogram with its layout (from the halln and cds `histogram.hpp`, which are one file).
-    - [ ] Run fields: build, plan, calibration, time. Repetition fields: batch, time, environment, void, the allowed CPUs and the CPU at its start and end.
-    - [ ] The stamp cost as the first result of every run.
-    - [ ] A summary table on the console.
-- [ ] 8. The cds check. Done when `spsc_push_int_1024` gives ns per op within the noise of today's gbench figure for the same push.
-    - [ ] A scratch case in the cds worktree, built against plumb and never committed. Both benches run on the box through `boxrun -x`.
-- [ ] 9. Readings from the machine. Done when a box run carries every counter column and a WSL run carries the same columns as NaN.
+    - [ ] halln `feature/rigStability` lands as it is. Its `diff.py` and `noise.py` are the reference for step 9.
+    - [ ] cds `feature/benchInfra` does not land its `benchmarks/support` headers (`tsc.hpp`, `histogram.hpp`, `build_info.hpp`) or the latency harness in cds. They seed plumb in steps 3 and 7. Its `pin.hpp` stays in cds for fixtures that start threads. Its `tools/bench` changes may land, they are retired in step 12.
+- [ ] 8. Readings from the machine. Done when a box run carries every counter column and a WSL run carries the same columns as NaN.
     - [ ] Throttle counters and package temperature around each repetition. A repetition that throttled is void.
     - [ ] PMU counting phases: `perf_event_open` once, `rdpmc` around each batch, a phase per set that fits. The default set, `ipc` derived, NaN where the PMU cannot count. Pinned to one core type on a hybrid CPU.
     - [ ] Held frequency from cycles over reference cycles.
     - [ ] Case counts: monotonic counters a fixture exposes, read around each batch.
+- [ ] 9. Analysis. Done when a deliberate slowdown in a cds case is reported as a change and two runs of one build are not.
+    - [ ] In `plumb/tools/`, Python. Reads the binary results file and devenv's `env.json`. Writes `results.json`.
+    - [ ] Floor, from halln's `noise.py`: each run's own floor from the spread of its repetitions, and two runs of one build, the larger.
+    - [ ] A/B diff, from halln's `diff.py`: past the floor, outside both runs' spread, confirmed by a rerun. Refused when the identities differ. cds's suite-shift correction only for runs with no floor.
+    - [ ] Stamp cost removal, an option, from the run's recorded stamp cost.
+    - [ ] Markdown and plots, from halln's `to_md.py` and `plots.py` and cds's `bench_to_md.py`.
 - [ ] 10. cds, the first consumer. Done when every cds bench has a plumb case and its results sit beside the gbench figures they replace.
     - [ ] plumb as `extern/plumb` in cds. `benchmarks/**/bench_*.cpp` globbed into `cds_plumb`.
     - [ ] Port the latency harness and the gbench queue benches as cases.
     - [ ] devenv VS Code entries for `cds_plumb`. A run on the box through `boxrun -x`.
-- [ ] 11. Analysis. Done when a deliberate slowdown in a cds case is reported as a change and an A/A pair is not.
-    - [ ] In `plumb/tools/`, Python. Reads the binary results file and devenv's `env.json`. Writes `results.json`.
-    - [ ] Floor, from halln's `noise.py`: each run's own floor from its A/A arms, and two runs of one build, the larger.
-    - [ ] A/B diff, from halln's `diff.py`: past the floor, outside both runs' spread, confirmed by a rerun. Refused when the identities differ. cds's suite-shift correction only for runs with no floor.
-    - [ ] Stamp cost removal, an option, from the run's recorded stamp cost.
-    - [ ] Markdown and plots, from halln's `to_md.py` and `plots.py` and cds's `bench_to_md.py`.
-- [ ] 12. halln. Done when the halln cases reproduce the sweep's figures within its noise floor.
+- [ ] 11. halln. Done when the halln cases reproduce the sweep's figures within its noise floor.
     - [ ] plumb in halln. The rig as a fixture: roles started and warmed in its constructor, the receiver's stamp handed back through shared memory, its rig file through `HALLN_RIG`.
     - [ ] Port the rig's workloads as cases.
-- [ ] 13. Retire
+- [ ] 12. Retire. Done when a release is tagged.
     - [ ] cds: `tools/bench`, Google Benchmark and its FetchContent, `bench_results.json`.
     - [ ] halln: `tools/netbench`'s sweep, diff, noise and report. Rig code stays as fixtures.
     - [ ] `BENCHMARKS.md` in each repo written by plumb's tools.
     - [ ] quant-platform's copied queue benches go with the queues when it moves onto cds.
+    - [ ] Tag a release.
 - [ ] Later
     - [ ] Dependent ops, for the latency figure. More than one figure per sample. Counter sets per CPU model.
     - [ ] Names from reflection. Named parameter axes once a report plots against one.

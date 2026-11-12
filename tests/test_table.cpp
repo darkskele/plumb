@@ -55,9 +55,9 @@ plumb::Row row(std::string_view name, std::size_t n, std::size_t count) {
             .n          = n,
             .count      = count,
             .min        = 0.62,
-            .p5         = 0.634,
-            .p50        = 0.635,
-            .p95        = 0.641,
+            .p50        = 0.634,
+            .p90        = 0.635,
+            .p99        = 0.641,
             .max        = 1.2,
             .stamp_mean = 17.84,
             .stamp_sd   = 0.41};
@@ -81,7 +81,7 @@ TEST(Table, OneRowUnderItsHeaders) {
     ASSERT_EQ(ls.size(), 4u) << out;
     EXPECT_NE(ls[0].find("ns per op"), std::string::npos) << out;
     EXPECT_NE(ls[0].find("stamp ns"), std::string::npos) << out;
-    for (auto h : {"case", "n", "batches", "min", "p5", "p50", "p95", "max", "mean", "sd"})
+    for (auto h : {"case", "n", "batches", "min", "p50", "p90", "p99", "max", "mean", "sd"})
         EXPECT_NE(ls[1].find(h), std::string::npos) << h;
     EXPECT_TRUE(ls[3].starts_with("selftest_a ")) << out;
     for (auto v : {" 64 ", " 100,000 ", " 0.62 ", " 0.63 ", " 0.64 ", " 1.20 ", " 17.8 ", " 0.41"})

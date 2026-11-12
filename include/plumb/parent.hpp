@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "plumb/abandon.hpp"
+#include "plumb/fold.hpp"
 #include "plumb/plan.hpp"
 #include "plumb/process.hpp"
 #include "plumb/raw.hpp"
@@ -101,22 +102,25 @@ inline std::optional<std::string> void_reason(Exit e) {
 
 /// @brief Runs `cases` as children of `exe`: one sizing child each, then `rounds` rounds of one
 /// repetition each, in an order shuffled from `seed`. A void child is rerun, and a case void
-/// `max_voids` times is dropped. Prints their table. Returns the exit code.
+/// `max_voids` times is dropped. Each repetition is folded as it ends, its raw file kept if
+/// `keep_raw`. Prints their table. Returns the exit code.
 inline int run_parent(std::span<const Entry* const> cases, const std::filesystem::path& exe,
                       const std::filesystem::path& dir, std::uint64_t seed, std::size_t rounds,
-                      std::FILE* out, std::FILE* err) {
+                      bool keep_raw, std::FILE* out, std::FILE* err) {
+    auto start = std::chrono::system_clock::now();
     if (!detail::make_dir(dir, err)) return 1;
     std::ofstream(dir / "seed") << seed << '\n';
-    detail::check_invariant(err);
-    double ghz  = TscClock::calibrate(detail::parent_clock_window).ghz();
-    int    code = 0;
+    detail::check_build(err);
+    bool   invariant = detail::check_invariant(err);
+    double ghz       = TscClock::calibrate(detail::parent_clock_window).ghz();
+    int    code      = 0;
 
     struct Planned {
         const Entry*             entry;
-        Plan                     plan        = {};
-        std::size_t              voids       = 0;
+        Calibration              calibration = {};
+        std::vector<std::string> voids       = {};
         bool                     dropped     = false;
-        std::vector<std::size_t> rounds_done = {};
+        std::vector<Repetition>  reps        = {};
     };
 
     std::vector<Planned> planned;
@@ -132,8 +136,10 @@ inline int run_parent(std::span<const Entry* const> cases, const std::filesystem
             std::error_code ignored;
             std::filesystem::remove(file, ignored);
             std::println(err, "plumb: {} {} void, {}", p.entry->name, what, *why);
-            if (++p.voids == detail::max_voids) {
-                std::println(err, "plumb: {} dropped after {} voids", p.entry->name, p.voids);
+            p.voids.push_back(std::format("{}: {}", what, *why));
+            if (p.voids.size() == detail::max_voids) {
+                std::println(err, "plumb: {} dropped after {} voids", p.entry->name,
+                             p.voids.size());
                 p.dropped = true;
                 code      = 1;
             }
@@ -147,7 +153,7 @@ inline int run_parent(std::span<const Entry* const> cases, const std::filesystem
                       [&](const std::filesystem::path& f) -> std::optional<std::string> {
                           auto c = read_plan(f);
                           if (!c) return c.error();
-                          p.plan = c->plan;
+                          p.calibration = *c;
                           return {};
                       });
     }
@@ -157,39 +163,40 @@ inline int run_parent(std::span<const Entry* const> cases, const std::filesystem
         for (std::size_t i : order[r]) {
             auto& p    = planned[i];
             auto  path = detail::raw_path(dir, p.entry->name, r);
-            if (attempt(p, std::format("repetition {}", r),
-                        detail::child_args(p.entry->name, p.plan, ghz, path), path,
-                        [](const std::filesystem::path& f) -> std::optional<std::string> {
-                            auto raw = read_raw(f);
-                            if (!raw) return raw.error();
-                            return {};
-                        }))
-                p.rounds_done.push_back(r);
+            (void)attempt(p, std::format("repetition {}", r),
+                          detail::child_args(p.entry->name, p.calibration.plan, ghz, path), path,
+                          [&](const std::filesystem::path& f) -> std::optional<std::string> {
+                              auto rep = detail::fold_file(f, r, keep_raw);
+                              if (!rep) return rep.error();
+                              p.reps.push_back(std::move(*rep));
+                              return {};
+                          });
         }
     }
 
-    // One case's raw files in memory at a time.
+    Results          results{.seed          = seed,
+                             .ghz           = ghz,
+                             .tsc_invariant = invariant,
+                             .start_ns      = detail::epoch_ns(start),
+                             .rounds        = rounds,
+                             .cases         = {}};
     std::vector<Row> rows;
-    for (const Planned& p : planned) {
-        std::vector<Raw> raws;
-        for (std::size_t r : p.rounds_done) {
-            auto raw = read_raw(detail::raw_path(dir, p.entry->name, r));
-            if (raw)
-                raws.push_back(std::move(*raw));
-            else {
-                std::println(err, "plumb: {}", raw.error());
-                code = 1;
-            }
-        }
-        if (!p.dropped && !raws.empty())
-            rows.push_back(detail::row_of(p.entry->name, p.plan, raws));
+    for (Planned& p : planned) {
+        if (!p.dropped && !p.reps.empty())
+            rows.push_back(detail::row_of(p.entry->name, p.calibration.plan, p.reps));
+        results.cases.push_back({.name        = std::string(p.entry->name),
+                                 .calibration = p.calibration,
+                                 .voids       = std::move(p.voids),
+                                 .dropped     = p.dropped,
+                                 .reps        = std::move(p.reps)});
     }
+    if (!detail::save_results(dir, results, err)) code = 1;
 
     bool colour = detail::wants_colour(out);
     print_table(out, rows, colour);
-    std::println(out, "{}",
-                 detail::paint(std::format("raw files in {}, seed {}", dir.string(), seed),
-                               detail::dim, colour));
+    std::println(
+        out, "{}",
+        detail::paint(std::format("run in {}, seed {}", dir.string(), seed), detail::dim, colour));
     return code;
 }
 

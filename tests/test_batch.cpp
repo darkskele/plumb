@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <sched.h>
 
 #include <chrono>
 #include <cstddef>
@@ -160,6 +161,20 @@ TEST(Batches, RecordsTheStampCost) {
     auto b = plumb::detail::run_batches<Counter, CountOp>(plumb::keep, 1, 1, no_warmup);
     EXPECT_GT(b.stamp_cost.count(), 1u);
     EXPECT_GT(b.stamp_cost.min(), 0.0);
+}
+
+TEST(Batches, RecordsTheCpuAtTheStartAndEnd) {
+    cpu_set_t was;
+    ASSERT_EQ(sched_getaffinity(0, sizeof was, &was), 0);
+    int       cpu = sched_getcpu();
+    cpu_set_t one;
+    CPU_ZERO(&one);
+    CPU_SET(cpu, &one);
+    ASSERT_EQ(sched_setaffinity(0, sizeof one, &one), 0);
+    auto b = plumb::detail::run_batches<Counter, CountOp>(plumb::keep, 1, 1, no_warmup);
+    ASSERT_EQ(sched_setaffinity(0, sizeof was, &was), 0);
+    EXPECT_EQ(b.cpu_start, cpu);
+    EXPECT_EQ(b.cpu_end, cpu);
 }
 
 TEST(BatchesDeathTest, EmptyBatchStops) {

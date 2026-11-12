@@ -16,9 +16,12 @@
 
 #include "plumb/batch.hpp"
 #include "plumb/clock.hpp"
+#include "plumb/fold.hpp"
+#include "plumb/histogram.hpp"
 #include "plumb/plan.hpp"
 #include "plumb/raw.hpp"
 #include "plumb/registry.hpp"
+#include "plumb/results.hpp"
 #include "plumb/summary.hpp"
 #include "plumb/table.hpp"
 
@@ -76,36 +79,77 @@ inline std::expected<Raw, std::string> run_repetition(const Entry& e, const TscC
     return raw;
 }
 
-/// @brief A case's row from its repetitions' raw files, every batch pooled.
-inline Row row_of(std::string_view name, Plan plan, std::span<const Raw> raws) pre(!raws.empty()) {
-    std::vector<double> per_op;
-    double              stamp_mean = 0, stamp_variance = 0;
-    for (const Raw& raw : raws) {
-        for (double ns : raw.ns) per_op.push_back(ns / static_cast<double>(plan.n));
-        stamp_mean += raw.header.stamp_mean;
-        stamp_variance += raw.header.stamp_variance;
+/// @brief A case's row from its repetitions. Exact min and max, percentiles from their histograms
+/// added together.
+inline Row row_of(std::string_view name, Plan plan, std::span<const Repetition> reps)
+    pre(!reps.empty()) {
+    Histogram   all;
+    std::size_t count = 0;
+    double      min = reps.front().figures.min, max = reps.front().figures.max;
+    double      stamp_mean = 0, stamp_variance = 0;
+    for (const Repetition& rep : reps) {
+        all += rep.histogram;
+        count += rep.header.count;
+        min = std::min(min, rep.figures.min);
+        max = std::max(max, rep.figures.max);
+        stamp_mean += rep.header.stamp_mean;
+        stamp_variance += rep.header.stamp_variance;
     }
-    std::ranges::sort(per_op);
-    auto reps = static_cast<double>(raws.size());
+    auto ns = [&](double p) { return static_cast<double>(all.percentile(p)) / 1000; };
+    auto n  = static_cast<double>(reps.size());
     return Row{.name       = name,
                .n          = plan.n,
-               .count      = per_op.size(),
-               .min        = per_op.front(),
-               .p5         = percentile(per_op, 0.05),
-               .p50        = percentile(per_op, 0.50),
-               .p95        = percentile(per_op, 0.95),
-               .max        = per_op.back(),
-               .stamp_mean = stamp_mean / reps,
-               .stamp_sd   = std::sqrt(stamp_variance / reps)};
+               .count      = count,
+               .min        = min,
+               .p50        = ns(0.50),
+               .p90        = ns(0.90),
+               .p99        = ns(0.99),
+               .max        = max,
+               .stamp_mean = stamp_mean / n,
+               .stamp_sd   = std::sqrt(stamp_variance / n)};
 }
 
-/// @brief Sizes and runs a case, writes its raw file to `path` and returns its row.
-inline std::expected<Row, std::string> run_case(const Entry& e, const TscClock& clock,
-                                                bool invariant, const std::filesystem::path& path) {
-    auto plan = size(e, clock).plan;
-    auto raw  = run_repetition(e, clock, invariant, plan, path);
+/// @brief Folds the raw file at `path`, then removes it unless `keep_raw`.
+inline std::expected<Repetition, std::string> fold_file(const std::filesystem::path& path,
+                                                        std::size_t round, bool keep_raw) {
+    auto raw = read_raw(path);
     if (!raw) return std::unexpected(raw.error());
-    return row_of(e.name, plan, std::span(&*raw, 1));
+    if (!keep_raw) {
+        std::error_code ignored;
+        std::filesystem::remove(path, ignored);
+    }
+    return fold(*raw, round);
+}
+
+/// @brief Sizes and runs a case once, its raw file written to `path` and kept if `keep_raw`.
+inline std::expected<CaseResult, std::string> run_case(const Entry& e, const TscClock& clock,
+                                                       bool                         invariant,
+                                                       const std::filesystem::path& path,
+                                                       bool                         keep_raw) {
+    auto calibration = size(e, clock);
+    auto raw         = run_repetition(e, clock, invariant, calibration.plan, path);
+    if (!raw) return std::unexpected(raw.error());
+    if (!keep_raw) {
+        std::error_code ignored;
+        std::filesystem::remove(path, ignored);
+    }
+    return CaseResult{.name        = std::string(e.name),
+                      .calibration = calibration,
+                      .voids       = {},
+                      .dropped     = false,
+                      .reps        = {fold(*raw, 0)}};
+}
+
+/// @brief Nanoseconds from the Unix epoch to `t`.
+inline std::int64_t epoch_ns(std::chrono::system_clock::time_point t) {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(t.time_since_epoch()).count();
+}
+
+/// @brief Writes `r` to the run directory's results file, or says why not.
+inline bool save_results(const std::filesystem::path& dir, const Results& r, std::FILE* err) {
+    auto written = write_results(dir / "results.bin", r);
+    if (!written) std::println(err, "plumb: {}", written.error());
+    return written.has_value();
 }
 
 /// @brief Makes the run directory, or says why not.
@@ -114,6 +158,16 @@ inline bool make_dir(const std::filesystem::path& dir, std::FILE* err) {
     std::filesystem::create_directories(dir, made);
     if (made) std::println(err, "plumb: cannot make {}: {}", dir.string(), made.message());
     return !made;
+}
+
+/// @brief Warns when this binary was built without optimisation or with a sanitizer.
+inline void check_build([[maybe_unused]] std::FILE* err) {
+#ifndef __OPTIMIZE__
+    std::println(err, "plumb: warning: built without optimisation, timings may be affected");
+#endif
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+    std::println(err, "plumb: warning: built with a sanitizer, timings may be affected");
+#endif
 }
 
 /// @brief Warns when the TSC is not invariant, and says whether it is.
@@ -150,29 +204,40 @@ inline int run_child(const Entry& e, Plan plan, double ghz, const std::filesyste
     return 0;
 }
 
-/// @brief Runs `cases` in this process, one raw file each in `dir`, then prints their table.
-/// Returns the exit code.
+/// @brief Runs `cases` in this process, then prints their table. A raw file each in `dir`, kept
+/// if `keep_raw`. Returns the exit code.
 inline int run_in_process(std::span<const Entry* const> cases, const std::filesystem::path& dir,
-                          std::FILE* out, std::FILE* err) {
+                          bool keep_raw, std::FILE* out, std::FILE* err) {
+    auto start = std::chrono::system_clock::now();
     if (!detail::make_dir(dir, err)) return 1;
+    detail::check_build(err);
     bool invariant = detail::check_invariant(err);
     auto clock     = TscClock::calibrate(detail::clock_window);
 
+    Results          results{.seed          = 0,
+                             .ghz           = clock.ghz(),
+                             .tsc_invariant = invariant,
+                             .start_ns      = detail::epoch_ns(start),
+                             .rounds        = 1,
+                             .cases         = {}};
     std::vector<Row> rows;
     int              code = 0;
     for (const Entry* e : cases) {
-        auto row = detail::run_case(*e, clock, invariant, dir / (std::string(e->name) + ".raw"));
-        if (row)
-            rows.push_back(*row);
-        else {
-            std::println(err, "plumb: {}", row.error());
+        auto c =
+            detail::run_case(*e, clock, invariant, dir / (std::string(e->name) + ".raw"), keep_raw);
+        if (!c) {
+            std::println(err, "plumb: {}", c.error());
             code = 1;
+            continue;
         }
+        rows.push_back(detail::row_of(e->name, c->calibration.plan, c->reps));
+        results.cases.push_back(std::move(*c));
     }
+    if (!detail::save_results(dir, results, err)) code = 1;
     bool colour = detail::wants_colour(out);
     print_table(out, rows, colour);
     std::println(out, "{}",
-                 detail::paint(std::format("raw files in {}", dir.string()), detail::dim, colour));
+                 detail::paint(std::format("run in {}", dir.string()), detail::dim, colour));
     return code;
 }
 
