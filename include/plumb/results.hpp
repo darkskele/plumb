@@ -23,14 +23,14 @@
 
 namespace plumb {
 
-/// @brief A case in a run's results. Its sizing, its voids, and its repetitions in the order they
-/// ran.
+/// @brief A case in a run's results. Its sizing, why each void child was void, and its repetitions
+/// in the order they ran.
 struct CaseResult {
-    std::string             name;
-    Calibration             calibration;
-    std::uint64_t           voids;
-    bool                    dropped;
-    std::vector<Repetition> reps;
+    std::string              name;
+    Calibration              calibration;
+    std::vector<std::string> voids;
+    bool                     dropped;
+    std::vector<Repetition>  reps;
 
     bool operator==(const CaseResult&) const = default;
 };
@@ -152,7 +152,8 @@ inline std::expected<void, std::string> write_results(const std::filesystem::pat
         out.put(std::uint64_t{c.calibration.plan.n});
         out.put(std::uint64_t{c.calibration.plan.count});
         out.put(c.calibration.batch_ns);
-        out.put(c.voids);
+        out.put(std::uint64_t{c.voids.size()});
+        for (const std::string& v : c.voids) out.put(std::string_view(v));
         out.put(std::uint8_t{c.dropped});
         out.put(std::uint64_t{c.reps.size()});
         for (const Repetition& rep : c.reps) detail::put(out, rep);
@@ -192,8 +193,9 @@ inline std::expected<Results, std::string> read_results(const std::filesystem::p
         c.calibration.plan.n     = in.get<std::uint64_t>();
         c.calibration.plan.count = in.get<std::uint64_t>();
         c.calibration.batch_ns   = in.get<double>();
-        c.voids                  = in.get<std::uint64_t>();
-        c.dropped                = in.get<std::uint8_t>() != 0;
+        c.voids.resize(in.length(8));
+        for (std::string& v : c.voids) v = in.get_string();
+        c.dropped = in.get<std::uint8_t>() != 0;
         c.reps.resize(in.length(1));
         for (Repetition& rep : c.reps) {
             rep.round   = in.get<std::uint64_t>();

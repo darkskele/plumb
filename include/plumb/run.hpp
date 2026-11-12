@@ -135,7 +135,7 @@ inline std::expected<CaseResult, std::string> run_case(const Entry& e, const Tsc
     }
     return CaseResult{.name        = std::string(e.name),
                       .calibration = calibration,
-                      .voids       = 0,
+                      .voids       = {},
                       .dropped     = false,
                       .reps        = {fold(*raw, 0)}};
 }
@@ -158,6 +158,16 @@ inline bool make_dir(const std::filesystem::path& dir, std::FILE* err) {
     std::filesystem::create_directories(dir, made);
     if (made) std::println(err, "plumb: cannot make {}: {}", dir.string(), made.message());
     return !made;
+}
+
+/// @brief Warns when this binary was built without optimisation or with a sanitizer.
+inline void check_build([[maybe_unused]] std::FILE* err) {
+#ifndef __OPTIMIZE__
+    std::println(err, "plumb: warning: built without optimisation, timings may be affected");
+#endif
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+    std::println(err, "plumb: warning: built with a sanitizer, timings may be affected");
+#endif
 }
 
 /// @brief Warns when the TSC is not invariant, and says whether it is.
@@ -200,6 +210,7 @@ inline int run_in_process(std::span<const Entry* const> cases, const std::filesy
                           bool keep_raw, std::FILE* out, std::FILE* err) {
     auto start = std::chrono::system_clock::now();
     if (!detail::make_dir(dir, err)) return 1;
+    detail::check_build(err);
     bool invariant = detail::check_invariant(err);
     auto clock     = TscClock::calibrate(detail::clock_window);
 

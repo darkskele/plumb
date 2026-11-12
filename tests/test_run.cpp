@@ -3,6 +3,9 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -100,4 +103,23 @@ TEST(Run, RowAddsItsRepetitionsHistograms) {
     EXPECT_NEAR(row.p50, 50.0, 50.0 / 128);
     EXPECT_EQ(row.stamp_mean, 15.0);
     EXPECT_EQ(row.stamp_sd, std::sqrt(10.0));
+}
+
+TEST(Run, WarnsOfABuildThatIsNotRelease) {
+    char*       buf = nullptr;
+    std::size_t len = 0;
+    std::FILE*  err = open_memstream(&buf, &len);
+    plumb::detail::check_build(err);
+    std::fclose(err);
+    std::string said(buf, len);
+    std::free(buf);
+
+    std::string expected;
+#ifndef __OPTIMIZE__
+    expected += "plumb: warning: built without optimisation, timings may be affected\n";
+#endif
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+    expected += "plumb: warning: built with a sanitizer, timings may be affected\n";
+#endif
+    EXPECT_EQ(said, expected);
 }

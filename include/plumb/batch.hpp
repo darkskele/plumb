@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sched.h>
+
 #include <chrono>
 #include <concepts>
 #include <cstddef>
@@ -51,13 +53,16 @@ struct Warmup {
     std::size_t              batches = 10;
 };
 
-/// @brief One repetition's raw record. A figure per batch of `n` ops, and the stamp cost.
-/// Figures are ticks, or nanoseconds when `measured`.
+/// @brief One repetition's raw record. A figure per batch of `n` ops, the stamp cost, and the CPU
+/// before the first counted batch and after the last, -1 when unknown. Figures are ticks, or
+/// nanoseconds when `measured`.
 struct Batches {
     std::size_t         n;
     bool                measured;
     Summary             stamp_cost;
     std::vector<double> figures;
+    int                 cpu_start = -1;
+    int                 cpu_end   = -1;
 };
 
 /// @brief Reads per stamp cost measurement.
@@ -88,7 +93,9 @@ Batches run_batches(Reset<F> reset, std::size_t n, std::size_t count, Warmup war
                 .stamp_cost = TscClock::stamp_cost(stamp_reads),
                 .figures    = {}};
     out.figures.reserve(count);
+    out.cpu_start = sched_getcpu();
     for (std::size_t i = 0; i < count; ++i) out.figures.push_back(batch());
+    out.cpu_end = sched_getcpu();
     return out;
 }
 

@@ -20,24 +20,30 @@ plumb::Repetition rep(std::size_t round, double first) {
     raw.header.n          = 2;
     raw.header.ghz        = 2.4;
     raw.header.stamp_mean = 17.5;
+    raw.header.cpu_start  = 3;
+    raw.header.cpu_end    = 5;
     for (int i = 0; i < 30; ++i) raw.ns.push_back(first + i);
     raw.header.count = raw.ns.size();
     return plumb::fold(raw, round);
 }
 
 plumb::Results sample() {
-    return {
-        .seed          = 7,
-        .ghz           = 2.4,
-        .tsc_invariant = true,
-        .start_ns      = 1'762'000'000'000'000'000,
-        .rounds        = 2,
-        .cases         = {{.name        = "push",
-                           .calibration = {.plan = {.n = 2, .count = 30}, .batch_ns = 5'100},
-                           .voids       = 1,
-                           .dropped     = false,
-                           .reps        = {rep(0, 10), rep(1, -3)}},
-                          {.name = "crash", .calibration = {}, .voids = 3, .dropped = true, .reps = {}}}};
+    return {.seed          = 7,
+            .ghz           = 2.4,
+            .tsc_invariant = true,
+            .start_ns      = 1'762'000'000'000'000'000,
+            .rounds        = 2,
+            .cases         = {{.name        = "push",
+                               .calibration = {.plan = {.n = 2, .count = 30}, .batch_ns = 5'100},
+                               .voids       = {"repetition 1: killed by SIGABRT"},
+                               .dropped     = false,
+                               .reps        = {rep(0, 10), rep(1, -3)}},
+                              {.name        = "crash",
+                               .calibration = {},
+                               .voids       = {"calibration: exited 2", "calibration: abandoned",
+                                               "calibration: killed by SIGSEGV"},
+                               .dropped     = true,
+                               .reps        = {}}}};
 }
 
 fs::path temp_file(const std::string& name) {

@@ -110,16 +110,17 @@ inline int run_parent(std::span<const Entry* const> cases, const std::filesystem
     auto start = std::chrono::system_clock::now();
     if (!detail::make_dir(dir, err)) return 1;
     std::ofstream(dir / "seed") << seed << '\n';
+    detail::check_build(err);
     bool   invariant = detail::check_invariant(err);
     double ghz       = TscClock::calibrate(detail::parent_clock_window).ghz();
     int    code      = 0;
 
     struct Planned {
-        const Entry*            entry;
-        Calibration             calibration = {};
-        std::size_t             voids       = 0;
-        bool                    dropped     = false;
-        std::vector<Repetition> reps        = {};
+        const Entry*             entry;
+        Calibration              calibration = {};
+        std::vector<std::string> voids       = {};
+        bool                     dropped     = false;
+        std::vector<Repetition>  reps        = {};
     };
 
     std::vector<Planned> planned;
@@ -135,8 +136,10 @@ inline int run_parent(std::span<const Entry* const> cases, const std::filesystem
             std::error_code ignored;
             std::filesystem::remove(file, ignored);
             std::println(err, "plumb: {} {} void, {}", p.entry->name, what, *why);
-            if (++p.voids == detail::max_voids) {
-                std::println(err, "plumb: {} dropped after {} voids", p.entry->name, p.voids);
+            p.voids.push_back(std::format("{}: {}", what, *why));
+            if (p.voids.size() == detail::max_voids) {
+                std::println(err, "plumb: {} dropped after {} voids", p.entry->name,
+                             p.voids.size());
                 p.dropped = true;
                 code      = 1;
             }
@@ -183,7 +186,7 @@ inline int run_parent(std::span<const Entry* const> cases, const std::filesystem
             rows.push_back(detail::row_of(p.entry->name, p.calibration.plan, p.reps));
         results.cases.push_back({.name        = std::string(p.entry->name),
                                  .calibration = p.calibration,
-                                 .voids       = p.voids,
+                                 .voids       = std::move(p.voids),
                                  .dropped     = p.dropped,
                                  .reps        = std::move(p.reps)});
     }

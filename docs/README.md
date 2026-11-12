@@ -43,14 +43,14 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~`--run PATTERN`: every case whose whole name the regex matches.~~
 - [x] ~~6. The cds check. Done when `spsc_push_int_1024` gives ns per op that matches gbench's figure for the same push, any gap explained.~~
     - [x] ~~A scratch case in the cds worktree, built against plumb and never committed. Both benches run on the box through `boxrun -x`.~~
-- [ ] 7. Results. Done when two runs of the same build give binary results files, and console tables a person can compare by eye.
-    - [ ] One binary results file per run, schema version 1. Figures and histograms, no samples.
-    - [ ] Each repetition folded in as it ends: its own min, p50, p90, p99 and max exact from its samples, its own histogram, its raw file deleted unless `--keep-raw`.
-    - [ ] Log-linear histogram with its layout, from the halln and cds `histogram.hpp`, which are one file. Drift windows per repetition.
-    - [ ] Per case: count, min, p50, p90, p99 and max from its repetitions' histograms added together.
-    - [ ] Run fields: build, plan, calibration, time. Repetition fields: batch, time, environment, void, the allowed CPUs and the CPU at its start and end.
-    - [ ] The stamp cost as the first result of every run.
-    - [ ] A summary table on the console.
+- [x] ~~7. Results. Done when two runs of the same build give binary results files, and console tables a person can compare by eye.~~
+    - [x] ~~One binary results file per run, schema version 1. Figures and histograms, no samples.~~
+    - [x] ~~Each repetition folded in as it ends: its own min, p50, p90, p99 and max exact from its samples, its own histogram, its raw file deleted unless `--keep-raw`.~~
+    - [x] ~~Log-linear histogram with its layout, from the halln and cds `histogram.hpp`, which are one file. Drift windows per repetition.~~
+    - [x] ~~Per case: count, min, p50, p90, p99 and max from its repetitions' histograms added together.~~
+    - [x] ~~Run fields: seed, TSC rate, start time, rounds. Case fields: plan, calibration, why each void child was void. Repetition fields: round, stamp cost, the CPU at its start and end. Raw version 3. Build and environment are the analysis's to join.~~
+    - [x] ~~A build without optimisation or with a sanitizer is warned of.~~
+    - [x] ~~A summary table on the console.~~
 - [ ] 8. Readings from the machine. Done when a box run carries every counter column and a WSL run carries the same columns as NaN.
     - [ ] Throttle counters and package temperature around each repetition. A repetition that throttled is void.
     - [ ] PMU counting phases: `perf_event_open` once, `rdpmc` around each batch, a phase per set that fits. The default set, `ipc` derived, NaN where the PMU cannot count. Pinned to one core type on a hybrid CPU.

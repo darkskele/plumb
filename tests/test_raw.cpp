@@ -45,11 +45,13 @@ TEST(Raw, ConvertsTicksToNs) {
     auto b = plumb::detail::run_batches<Counter, decltype(count_op)>(plumb::keep, 8, 16, no_warmup);
     auto raw = plumb::to_raw(b, clock, false);
 
-    EXPECT_EQ(raw.header.version, 2u);
+    EXPECT_EQ(raw.header.version, 3u);
     EXPECT_EQ(raw.header.tsc_invariant, 0u);
     EXPECT_EQ(raw.header.measured, 0u);
     EXPECT_EQ(raw.header.n, 8u);
     EXPECT_EQ(raw.header.count, 16u);
+    EXPECT_EQ(raw.header.cpu_start, b.cpu_start);
+    EXPECT_EQ(raw.header.cpu_end, b.cpu_end);
     EXPECT_DOUBLE_EQ(raw.header.ghz, clock.ghz());
     ASSERT_EQ(raw.ns.size(), 16u);
     for (std::size_t i = 0; i < raw.ns.size(); ++i)

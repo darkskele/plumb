@@ -243,6 +243,7 @@ TEST(Cli, RunWritesItsResults) {
     EXPECT_EQ(r->cases[1].name, "count_b");
     for (const auto& k : r->cases) {
         EXPECT_FALSE(k.dropped);
+        EXPECT_TRUE(k.voids.empty());
         ASSERT_EQ(k.reps.size(), 1u);
         EXPECT_EQ(k.reps[0].header.count, k.calibration.plan.count);
         EXPECT_EQ(k.reps[0].histogram.count(), k.calibration.plan.count);
