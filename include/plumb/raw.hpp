@@ -38,7 +38,8 @@ struct RawHeader {
 
 static_assert(std::is_trivially_copyable_v<RawHeader>);
 static_assert(sizeof(RawHeader) == 88, "the raw header layout changed, bump raw_version");
-static_assert(std::endian::native == std::endian::little);
+static_assert(std::endian::native == std::endian::little,
+              "raw files are written in native byte order, which must be little-endian");
 
 inline constexpr std::array<char, 8> raw_magic   = {'p', 'l', 'u', 'm', 'b', 'r', 'a', 'w'};
 inline constexpr std::uint32_t       raw_version = 2;

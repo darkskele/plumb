@@ -1,4 +1,4 @@
-# A run of every case through the parent: a row each, a plan each, a raw file per case per round, the seed.
+# A run of every case through the parent: a row each, a plan each, the seed, its results, no raw files left.
 set -e
 bin=$1
 dir=$2
@@ -9,9 +9,7 @@ echo "$out" | grep -q '^selftest_a  *64 '
 echo "$out" | grep -q '^selftest_b  *1 '
 echo "$out" | grep -q '^selftest_m  *8  *625,000 │  *1,000  *1,000  *1,000  *1,000  *1,000 │'
 echo "$out" | grep -q 'seed 7$'
-for c in selftest_a selftest_b selftest_m; do
-    test -f "$dir/$c.plan"
-    for r in 0 1 2 3 4; do test -f "$dir/$c.$r.raw"; done
-    test ! -e "$dir/$c.5.raw"
-done
+for c in selftest_a selftest_b selftest_m; do test -f "$dir/$c.plan"; done
+test -s "$dir/results.bin"
+if ls "$dir" | grep -q '\.raw$'; then exit 1; fi
 test "$(cat "$dir/seed")" = 7

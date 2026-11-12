@@ -67,29 +67,37 @@ TEST(Run, MeasuredOpIsSizedByItsOwnTime) {
 
 namespace {
 
-plumb::Raw raw_of(double stamp_mean, double stamp_variance, std::vector<double> ns) {
+plumb::Repetition rep_of(double stamp_mean, double stamp_variance, std::vector<double> ns) {
     plumb::Raw raw{};
     raw.header.n              = 2;
     raw.header.count          = ns.size();
     raw.header.stamp_mean     = stamp_mean;
     raw.header.stamp_variance = stamp_variance;
     raw.ns                    = std::move(ns);
-    return raw;
+    return plumb::fold(raw, 0);
 }
 
 }  // namespace
 
-TEST(Run, RowPoolsItsRepetitions) {
-    auto                    a = raw_of(10, 4, {8, 2});
-    auto                    b = raw_of(20, 16, {6, 4, 10});
-    std::vector<plumb::Raw> raws{a, b};
-    auto                    row = plumb::detail::row_of("x", {.n = 2, .count = 3}, raws);
+TEST(Run, RowAddsItsRepetitionsHistograms) {
+    // Per op, 1 to 100 ns over two repetitions.
+    std::vector<double> low, high;
+    for (int i = 1; i <= 40; ++i) low.push_back(2.0 * i);
+    for (int i = 41; i <= 100; ++i) high.push_back(2.0 * i);
+    std::vector<plumb::Repetition> reps{rep_of(10, 4, low), rep_of(20, 16, high)};
+    auto                           row = plumb::detail::row_of("x", {.n = 2, .count = 3}, reps);
+
+    plumb::Histogram both = reps[0].histogram;
+    both += reps[1].histogram;
     EXPECT_EQ(row.name, "x");
     EXPECT_EQ(row.n, 2u);
-    EXPECT_EQ(row.count, 5u);
+    EXPECT_EQ(row.count, 100u);
     EXPECT_EQ(row.min, 1.0);
-    EXPECT_EQ(row.max, 5.0);
-    EXPECT_EQ(row.p50, 3.0);
+    EXPECT_EQ(row.max, 100.0);
+    EXPECT_EQ(row.p50, static_cast<double>(both.percentile(0.50)) / 1000);
+    EXPECT_EQ(row.p90, static_cast<double>(both.percentile(0.90)) / 1000);
+    EXPECT_EQ(row.p99, static_cast<double>(both.percentile(0.99)) / 1000);
+    EXPECT_NEAR(row.p50, 50.0, 50.0 / 128);
     EXPECT_EQ(row.stamp_mean, 15.0);
     EXPECT_EQ(row.stamp_sd, std::sqrt(10.0));
 }

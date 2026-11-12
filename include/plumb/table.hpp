@@ -24,9 +24,9 @@ struct Row {
     std::size_t      n;
     std::size_t      count;
     double           min;
-    double           p5;
     double           p50;
-    double           p95;
+    double           p90;
+    double           p99;
     double           max;
     double           stamp_mean;
     double           stamp_sd;
@@ -75,9 +75,9 @@ inline std::string paint(std::string_view text, std::string_view style, bool col
 inline void print_table(std::FILE* out, std::span<const Row> rows, bool colour) {
     constexpr std::size_t                           columns = 10;
     constexpr std::array<std::string_view, columns> headers = {
-        "case", "n", "batches", "min", "p5", "p50", "p95", "max", "mean", "sd"};
+        "case", "n", "batches", "min", "p50", "p90", "p99", "max", "mean", "sd"};
     constexpr std::array<std::string_view, columns> styles = {
-        detail::cyan, {}, {}, {}, {}, detail::bold, {}, {}, detail::dim, detail::dim};
+        detail::cyan, {}, {}, {}, detail::bold, {}, {}, {}, detail::dim, detail::dim};
     constexpr std::array<std::size_t, 4>      group_start = {0, 3, 8, columns};
     constexpr std::array<std::string_view, 3> captions    = {"", "ns per op", "stamp ns"};
     constexpr std::size_t                     groups      = captions.size();
@@ -85,8 +85,8 @@ inline void print_table(std::FILE* out, std::span<const Row> rows, bool colour) 
     std::vector<std::array<std::string, columns>> cells;
     for (const Row& r : rows)
         cells.push_back({std::string(r.name), detail::thousands(r.n), detail::thousands(r.count),
-                         detail::ns_text(r.min), detail::ns_text(r.p5), detail::ns_text(r.p50),
-                         detail::ns_text(r.p95), detail::ns_text(r.max),
+                         detail::ns_text(r.min), detail::ns_text(r.p50), detail::ns_text(r.p90),
+                         detail::ns_text(r.p99), detail::ns_text(r.max),
                          detail::ns_text(r.stamp_mean), detail::ns_text(r.stamp_sd)});
 
     std::array<std::size_t, columns> widths{};
