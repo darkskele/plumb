@@ -52,7 +52,7 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~A build without optimisation or with a sanitizer is warned of.~~
     - [x] ~~A summary table on the console.~~
 - [ ] 8. Readings from the machine. Done when a box run carries every counter column and a WSL run carries the same columns as NaN.
-    - [ ] Throttle counters and package temperature around each repetition. A repetition that throttled is void.
+    - [x] ~~Throttle counters and package temperature around each repetition. A repetition that throttled is void. Raw version 4, results version 2.~~
     - [ ] PMU counting phases: `perf_event_open` once, `rdpmc` around each batch, a phase per set that fits. The default set, `ipc` derived, NaN where the PMU cannot count. Pinned to one core type on a hybrid CPU.
     - [ ] Held frequency from cycles over reference cycles.
     - [ ] Case counts: monotonic counters a fixture exposes, read around each batch.

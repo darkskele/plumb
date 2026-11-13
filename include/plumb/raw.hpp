@@ -4,9 +4,11 @@
 #include <bit>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <expected>
 #include <filesystem>
 #include <format>
+#include <limits>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -18,7 +20,8 @@
 namespace plumb {
 
 /// @brief The fixed start of a raw file. Stamp cost figures are in nanoseconds. The CPU before the
-/// first batch and after the last, -1 when unknown.
+/// first batch and after the last, -1 when unknown. Throttle events during the repetition and the
+/// package temperature at its start and end, NaN when unknown.
 struct RawHeader {
     std::array<char, 8> magic;
     std::uint32_t       version;
@@ -35,17 +38,23 @@ struct RawHeader {
     double              stamp_max;
     double              stamp_mean;
     double              stamp_variance;
+    double              throttles;
+    double              temp_start;
+    double              temp_end;
 
-    bool operator==(const RawHeader&) const = default;
+    /// @brief Byte for byte, so NaN readings compare equal.
+    bool operator==(const RawHeader& other) const noexcept {
+        return std::memcmp(this, &other, sizeof other) == 0;
+    }
 };
 
 static_assert(std::is_trivially_copyable_v<RawHeader>);
-static_assert(sizeof(RawHeader) == 96, "the raw header layout changed, bump raw_version");
+static_assert(sizeof(RawHeader) == 120, "the raw header layout changed, bump raw_version");
 static_assert(std::endian::native == std::endian::little,
               "raw files are written in native byte order, which must be little-endian");
 
 inline constexpr std::array<char, 8> raw_magic   = {'p', 'l', 'u', 'm', 'b', 'r', 'a', 'w'};
-inline constexpr std::uint32_t       raw_version = 3;
+inline constexpr std::uint32_t       raw_version = 4;
 
 /// @brief One repetition's raw file: the header, then nanoseconds per batch.
 struct Raw {
@@ -72,7 +81,10 @@ inline Raw to_raw(const detail::Batches& b, const TscClock& clock, bool invarian
                           .stamp_min      = b.stamp_cost.min() / g,
                           .stamp_max      = b.stamp_cost.max() / g,
                           .stamp_mean     = b.stamp_cost.mean() / g,
-                          .stamp_variance = b.stamp_cost.variance() / (g * g)},
+                          .stamp_variance = b.stamp_cost.variance() / (g * g),
+                          .throttles      = std::numeric_limits<double>::quiet_NaN(),
+                          .temp_start     = std::numeric_limits<double>::quiet_NaN(),
+                          .temp_end       = std::numeric_limits<double>::quiet_NaN()},
                .ns     = {}};
     raw.ns.reserve(b.figures.size());
     for (double f : b.figures) raw.ns.push_back(b.measured ? f : f / g);

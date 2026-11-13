@@ -18,6 +18,7 @@
 #include "plumb/clock.hpp"
 #include "plumb/fold.hpp"
 #include "plumb/histogram.hpp"
+#include "plumb/machine.hpp"
 #include "plumb/plan.hpp"
 #include "plumb/raw.hpp"
 #include "plumb/registry.hpp"
@@ -70,11 +71,18 @@ inline std::filesystem::path default_out(std::chrono::system_clock::time_point s
 
 inline constexpr std::chrono::milliseconds clock_window{100};
 
-/// @brief Runs one repetition of a case to `plan` and writes its raw file to `path`.
+/// @brief Runs one repetition of a case to `plan`, the machine read before and after, and writes
+/// its raw file to `path`.
 inline std::expected<Raw, std::string> run_repetition(const Entry& e, const TscClock& clock,
                                                       bool invariant, Plan plan,
                                                       const std::filesystem::path& path) {
-    auto raw = to_raw(e.batches(plan.n, plan.count), clock, invariant);
+    auto before           = read_machine();
+    auto batches          = e.batches(plan.n, plan.count);
+    auto after            = read_machine();
+    auto raw              = to_raw(batches, clock, invariant);
+    raw.header.throttles  = after.throttles - before.throttles;
+    raw.header.temp_start = before.temp_c;
+    raw.header.temp_end   = after.temp_c;
     if (auto written = write_raw(path, raw); !written) return std::unexpected(written.error());
     return raw;
 }

@@ -8,7 +8,6 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
     - [ ] halln `feature/rigStability` lands as it is. Its `diff.py` and `noise.py` are the reference for step 9.
     - [ ] cds `feature/benchInfra` does not land its `benchmarks/support` headers (`tsc.hpp`, `histogram.hpp`, `build_info.hpp`) or the latency harness in cds. They seed plumb in steps 3 and 7. Its `pin.hpp` stays in cds for fixtures that start threads. Its `tools/bench` changes may land, they are retired in step 12.
 - [ ] 8. Readings from the machine. Done when a box run carries every counter column and a WSL run carries the same columns as NaN.
-    - [ ] Throttle counters and package temperature around each repetition. A repetition that throttled is void.
     - [ ] PMU counting phases: `perf_event_open` once, `rdpmc` around each batch, a phase per set that fits. The default set, `ipc` derived, NaN where the PMU cannot count. Pinned to one core type on a hybrid CPU.
     - [ ] Held frequency from cycles over reference cycles.
     - [ ] Case counts: monotonic counters a fixture exposes, read around each batch.
