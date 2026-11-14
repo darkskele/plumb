@@ -6,10 +6,12 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <type_traits>
 #include <vector>
 
 #include "plumb/clock.hpp"
+#include "plumb/counters.hpp"
 #include "plumb/fixture.hpp"
 #include "plumb/summary.hpp"
 
@@ -53,9 +55,9 @@ struct Warmup {
     std::size_t              batches = 10;
 };
 
-/// @brief One repetition's raw record. A figure per batch of `n` ops, the stamp cost, and the CPU
-/// before the first counted batch and after the last, -1 when unknown. Figures are ticks, or
-/// nanoseconds when `measured`.
+/// @brief One repetition's raw record. A figure per batch of `n` ops, the stamp cost, the CPU
+/// before the first counted batch and after the last, -1 when unknown, and the hardware counts
+/// between them. Figures are ticks, or nanoseconds when `measured`.
 struct Batches {
     std::size_t         n;
     bool                measured;
@@ -63,6 +65,9 @@ struct Batches {
     std::vector<double> figures;
     int                 cpu_start = -1;
     int                 cpu_end   = -1;
+    CounterReading      counters  = {.cycles       = std::numeric_limits<double>::quiet_NaN(),
+                                     .ref_cycles   = std::numeric_limits<double>::quiet_NaN(),
+                                     .instructions = std::numeric_limits<double>::quiet_NaN()};
 };
 
 /// @brief Reads per stamp cost measurement.
@@ -75,6 +80,7 @@ inline constexpr std::size_t stamp_reads = 10'000;
 template <Fixture F, Op<F> O>
 Batches run_batches(Reset<F> reset, std::size_t n, std::size_t count, Warmup warmup = {}) noexcept
     pre(n > 0) pre(count > 0) {
+    auto counters = Counters::open();
     F    fixture{};
     bool first = true;
     auto batch = [&] {
@@ -94,8 +100,11 @@ Batches run_batches(Reset<F> reset, std::size_t n, std::size_t count, Warmup war
                 .figures    = {}};
     out.figures.reserve(count);
     out.cpu_start = sched_getcpu();
+    auto before   = counters.read();
     for (std::size_t i = 0; i < count; ++i) out.figures.push_back(batch());
-    out.cpu_end = sched_getcpu();
+    auto after   = counters.read();
+    out.cpu_end  = sched_getcpu();
+    out.counters = counted(before, after);
     return out;
 }
 

@@ -48,7 +48,7 @@ struct Results {
 };
 
 inline constexpr std::array<char, 8> results_magic   = {'p', 'l', 'u', 'm', 'b', 'r', 'e', 's'};
-inline constexpr std::uint32_t       results_version = 2;
+inline constexpr std::uint32_t       results_version = 3;
 
 namespace detail {
 

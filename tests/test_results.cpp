@@ -25,6 +25,8 @@ plumb::Repetition rep(std::size_t round, double first) {
     raw.header.throttles  = 0;
     raw.header.temp_start = 48.5;
     raw.header.temp_end   = 51;
+    raw.header.cycles     = 9e6;
+    raw.header.ref_cycles = 8e6;
     for (int i = 0; i < 30; ++i) raw.ns.push_back(first + i);
     raw.header.count = raw.ns.size();
     return plumb::fold(raw, round);
@@ -93,7 +95,7 @@ TEST(Results, OtherVersion) {
     f.seekp(8);
     f.write("\x09\0\0\0", 4);
     f.close();
-    expect_refused(path, "results version 9, expected 2");
+    expect_refused(path, "results version 9, expected 3");
 }
 
 TEST(Results, Truncated) {

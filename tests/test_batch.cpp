@@ -2,6 +2,7 @@
 #include <sched.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -175,6 +176,17 @@ TEST(Batches, RecordsTheCpuAtTheStartAndEnd) {
     ASSERT_EQ(sched_setaffinity(0, sizeof was, &was), 0);
     EXPECT_EQ(b.cpu_start, cpu);
     EXPECT_EQ(b.cpu_end, cpu);
+}
+
+TEST(Batches, CountsTheTimedBatchesWhereThePmuAllows) {
+    // One instruction per op that no build removes.
+    constexpr auto nop_op = [](Counter&) { asm volatile("nop"); };
+    auto           b =
+        plumb::detail::run_batches<Counter, decltype(nop_op)>(plumb::keep, 100, 1000, no_warmup);
+    if (std::isnan(b.counters.instructions)) GTEST_SKIP() << "no counts here";
+    EXPECT_GE(b.counters.instructions, 100.0 * 1000);
+    EXPECT_GT(b.counters.cycles, 0);
+    EXPECT_GT(b.counters.ref_cycles, 0);
 }
 
 TEST(BatchesDeathTest, EmptyBatchStops) {

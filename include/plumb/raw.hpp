@@ -20,8 +20,8 @@
 namespace plumb {
 
 /// @brief The fixed start of a raw file. Stamp cost figures are in nanoseconds. The CPU before the
-/// first batch and after the last, -1 when unknown. Throttle events during the repetition and the
-/// package temperature at its start and end, NaN when unknown.
+/// first batch and after the last, -1 when unknown, and the hardware counts between them. Throttle
+/// events during the repetition and the package temperature at its start and end. NaN when unknown.
 struct RawHeader {
     std::array<char, 8> magic;
     std::uint32_t       version;
@@ -41,6 +41,9 @@ struct RawHeader {
     double              throttles;
     double              temp_start;
     double              temp_end;
+    double              cycles;
+    double              ref_cycles;
+    double              instructions;
 
     /// @brief Byte for byte, so NaN readings compare equal.
     bool operator==(const RawHeader& other) const noexcept {
@@ -49,12 +52,12 @@ struct RawHeader {
 };
 
 static_assert(std::is_trivially_copyable_v<RawHeader>);
-static_assert(sizeof(RawHeader) == 120, "the raw header layout changed, bump raw_version");
+static_assert(sizeof(RawHeader) == 144, "the raw header layout changed, bump raw_version");
 static_assert(std::endian::native == std::endian::little,
               "raw files are written in native byte order, which must be little-endian");
 
 inline constexpr std::array<char, 8> raw_magic   = {'p', 'l', 'u', 'm', 'b', 'r', 'a', 'w'};
-inline constexpr std::uint32_t       raw_version = 4;
+inline constexpr std::uint32_t       raw_version = 5;
 
 /// @brief One repetition's raw file: the header, then nanoseconds per batch.
 struct Raw {
@@ -84,7 +87,10 @@ inline Raw to_raw(const detail::Batches& b, const TscClock& clock, bool invarian
                           .stamp_variance = b.stamp_cost.variance() / (g * g),
                           .throttles      = std::numeric_limits<double>::quiet_NaN(),
                           .temp_start     = std::numeric_limits<double>::quiet_NaN(),
-                          .temp_end       = std::numeric_limits<double>::quiet_NaN()},
+                          .temp_end       = std::numeric_limits<double>::quiet_NaN(),
+                          .cycles         = b.counters.cycles,
+                          .ref_cycles     = b.counters.ref_cycles,
+                          .instructions   = b.counters.instructions},
                .ns     = {}};
     raw.ns.reserve(b.figures.size());
     for (double f : b.figures) raw.ns.push_back(b.measured ? f : f / g);
