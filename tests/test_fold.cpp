@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "plumb/fold.hpp"
@@ -48,6 +49,22 @@ TEST(Fold, WindowsAreTheMedianOfEachTenthInTimeOrder) {
 TEST(Fold, FewerBatchesThanWindowsGiveAWindowEach) {
     auto rep = plumb::fold(raw_of(1, {3, 1, 2}), 0);
     EXPECT_EQ(rep.windows, (std::vector<double>{3, 1, 2}));
+}
+
+TEST(Fold, CountsPerOpAreAddedUpPerBucket) {
+    auto nan   = std::numeric_limits<double>::quiet_NaN();
+    auto raw   = raw_of(2, {2, 2, 4, 4});
+    raw.counts = {{10, 4, 2}, {30, 8, 6}, {nan, nan, nan}, {8, 6, 4}};
+    auto rep   = plumb::fold(raw, 0);
+    ASSERT_EQ(rep.histogram.filled().size(), 2u);
+    EXPECT_EQ(rep.counts,
+              (std::vector<plumb::BucketCounts>{
+                  {.counted = 2, .sum = {.cycles = 20, .ref_cycles = 6, .instructions = 4}},
+                  {.counted = 1, .sum = {.cycles = 4, .ref_cycles = 3, .instructions = 2}}}));
+}
+
+TEST(Fold, NoCountsGiveNoBucketCounts) {
+    EXPECT_TRUE(plumb::fold(rising(2, 10), 0).counts.empty());
 }
 
 TEST(Fold, KeepsTheHeader) {

@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -59,25 +60,38 @@ TEST(Counters, OneCoreTypeHasNoPmuToChoose) {
 }
 
 TEST(Counters, CountsAreTheDifference) {
-    plumb::detail::GroupRead a{.enabled = 100, .running = 100, .values = {10, 20, 30}};
-    plumb::detail::GroupRead b{.enabled = 250, .running = 250, .values = {15, 27, 39}};
+    plumb::detail::Snapshot a{.values = {10, 20, 30}, .stopped = 5};
+    plumb::detail::Snapshot b{.values = {15, 27, 39}, .stopped = 5};
     EXPECT_EQ(plumb::detail::counted(a, b),
               (plumb::CounterReading{.cycles = 5, .ref_cycles = 7, .instructions = 9}));
 }
 
-TEST(Counters, CountsThatDidNotRunThroughoutAreUnknown) {
-    plumb::detail::GroupRead a{.enabled = 100, .running = 100, .values = {10, 20, 30}};
-    plumb::detail::GroupRead b{.enabled = 250, .running = 200, .values = {15, 27, 39}};
-    auto                     c = plumb::detail::counted(a, b);
+TEST(Counters, CountsWithAGapInCountingAreUnknown) {
+    plumb::detail::Snapshot a{.values = {10, 20, 30}, .stopped = 5};
+    plumb::detail::Snapshot b{.values = {15, 27, 39}, .stopped = 80};
+    auto                    c = plumb::detail::counted(a, b);
     EXPECT_TRUE(std::isnan(c.cycles));
     EXPECT_TRUE(std::isnan(c.ref_cycles));
     EXPECT_TRUE(std::isnan(c.instructions));
 }
 
+TEST(Counters, CountsFromAReadOffTheHardwareAreUnknown) {
+    plumb::detail::Snapshot a{.values = {10, 20, 30}, .stopped = 5};
+    plumb::detail::Snapshot b{.values = {}, .stopped = 5, .ok = false};
+    EXPECT_TRUE(std::isnan(plumb::detail::counted(a, b).cycles));
+    EXPECT_TRUE(std::isnan(plumb::detail::counted(b, a).cycles));
+}
+
+TEST(Counters, ReadingsCompareByteForByte) {
+    auto nan = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_EQ((plumb::CounterReading{nan, nan, nan}), (plumb::CounterReading{nan, nan, nan}));
+    EXPECT_NE((plumb::CounterReading{1, 2, 3}), (plumb::CounterReading{1, 2, 4}));
+}
+
 TEST(Counters, NotOpenIsUnknown) {
     plumb::Counters none;
-    auto            c = plumb::detail::counted(none.read(), none.read());
-    EXPECT_TRUE(std::isnan(c.cycles));
+    EXPECT_FALSE(none.read().ok);
+    EXPECT_TRUE(std::isnan(plumb::detail::counted(none.read(), none.read()).cycles));
 }
 
 TEST(Counters, CountThisThreadWhereThePmuAllows) {

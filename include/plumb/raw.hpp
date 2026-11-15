@@ -16,12 +16,14 @@
 
 #include "plumb/batch.hpp"
 #include "plumb/clock.hpp"
+#include "plumb/counters.hpp"
 
 namespace plumb {
 
 /// @brief The fixed start of a raw file. Stamp cost figures are in nanoseconds. The CPU before the
-/// first batch and after the last, -1 when unknown, and the hardware counts between them. Throttle
-/// events during the repetition and the package temperature at its start and end. NaN when unknown.
+/// first batch and after the last, -1 when unknown, and the mean hardware counts of an empty batch.
+/// Throttle events during the repetition and the package temperature at its start and end. NaN
+/// when unknown.
 struct RawHeader {
     std::array<char, 8> magic;
     std::uint32_t       version;
@@ -41,9 +43,7 @@ struct RawHeader {
     double              throttles;
     double              temp_start;
     double              temp_end;
-    double              cycles;
-    double              ref_cycles;
-    double              instructions;
+    CounterReading      counter_cost;
 
     /// @brief Byte for byte, so NaN readings compare equal.
     bool operator==(const RawHeader& other) const noexcept {
@@ -57,12 +57,13 @@ static_assert(std::endian::native == std::endian::little,
               "raw files are written in native byte order, which must be little-endian");
 
 inline constexpr std::array<char, 8> raw_magic   = {'p', 'l', 'u', 'm', 'b', 'r', 'a', 'w'};
-inline constexpr std::uint32_t       raw_version = 5;
+inline constexpr std::uint32_t       raw_version = 6;
 
-/// @brief One repetition's raw file: the header, then nanoseconds per batch.
+/// @brief One repetition's raw file: the header, nanoseconds per batch, then counts per batch.
 struct Raw {
-    RawHeader           header;
-    std::vector<double> ns;
+    RawHeader                   header;
+    std::vector<double>         ns;
+    std::vector<CounterReading> counts;
 
     bool operator==(const Raw&) const = default;
 };
@@ -88,10 +89,9 @@ inline Raw to_raw(const detail::Batches& b, const TscClock& clock, bool invarian
                           .throttles      = std::numeric_limits<double>::quiet_NaN(),
                           .temp_start     = std::numeric_limits<double>::quiet_NaN(),
                           .temp_end       = std::numeric_limits<double>::quiet_NaN(),
-                          .cycles         = b.counters.cycles,
-                          .ref_cycles     = b.counters.ref_cycles,
-                          .instructions   = b.counters.instructions},
-               .ns     = {}};
+                          .counter_cost   = b.counter_cost},
+               .ns     = {},
+               .counts = b.counts};
     raw.ns.reserve(b.figures.size());
     for (double f : b.figures) raw.ns.push_back(b.measured ? f : f / g);
     return raw;
@@ -108,12 +108,14 @@ using File = std::unique_ptr<std::FILE, FileCloser>;
 }  // namespace detail
 
 /// @brief Writes `raw` to `path`, replacing any file there.
-inline std::expected<void, std::string> write_raw(const std::filesystem::path& path,
-                                                  const Raw&                   raw) {
+inline std::expected<void, std::string> write_raw(const std::filesystem::path& path, const Raw& raw)
+    pre(raw.counts.size() == raw.ns.size()) {
     detail::File f{std::fopen(path.c_str(), "wb")};
     if (!f) return std::unexpected(std::format("cannot open {} to write", path.string()));
     bool ok = std::fwrite(&raw.header, sizeof raw.header, 1, f.get()) == 1 &&
-              std::fwrite(raw.ns.data(), sizeof(double), raw.ns.size(), f.get()) == raw.ns.size();
+              std::fwrite(raw.ns.data(), sizeof(double), raw.ns.size(), f.get()) == raw.ns.size() &&
+              std::fwrite(raw.counts.data(), sizeof(CounterReading), raw.counts.size(), f.get()) ==
+                  raw.counts.size();
     if (!ok || std::fclose(f.release()) != 0)
         return std::unexpected(std::format("cannot write {}", path.string()));
     return {};
@@ -139,8 +141,13 @@ inline std::expected<Raw, std::string> read_raw(const std::filesystem::path& pat
     if (got != raw.ns.size())
         return std::unexpected(
             std::format("{}: truncated samples, {} of {}", where, got, raw.header.count));
+    raw.counts.resize(raw.header.count);
+    got = std::fread(raw.counts.data(), sizeof(CounterReading), raw.counts.size(), f.get());
+    if (got != raw.counts.size())
+        return std::unexpected(
+            std::format("{}: truncated counts, {} of {}", where, got, raw.header.count));
     if (std::fgetc(f.get()) != EOF)
-        return std::unexpected(std::format("{}: trailing bytes after the samples", where));
+        return std::unexpected(std::format("{}: trailing bytes after the counts", where));
     return raw;
 }
 

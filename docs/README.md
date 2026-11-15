@@ -53,8 +53,10 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~A summary table on the console.~~
 - [ ] 8. Readings from the machine. Done when a box run carries every counter column and a WSL run carries the same columns as NaN.
     - [x] ~~Throttle counters and package temperature around each repetition. A repetition that throttled is void. Raw version 4, results version 2.~~
-    - [ ] PMU counting phases: `perf_event_open` once, `rdpmc` around each batch, a phase per set that fits. The default set, `ipc` derived, NaN where the PMU cannot count. Pinned to one core type on a hybrid CPU.
-    - [x] ~~Held frequency from cycles over reference cycles. Cycles, reference cycles and instructions counted around the timed batches, on the core type the repetition starts on, NaN unless counted throughout. Raw version 5, results version 3.~~
+    - [x] ~~Cycles, reference cycles and instructions per batch: `perf_event_open` once, `rdpmc` around each batch outside the stamps, reset left out. On the core type the repetition starts on, NaN for a batch not counted throughout. The counts of an empty batch recorded, never subtracted.~~
+    - [x] ~~Counts per op added up per latency bucket in the results, so counts line up with latencies. Raw version 6, results version 4.~~
+    - [x] ~~Held frequency from cycles over reference cycles.~~
+    - [ ] More events, a set per phase that fits the general counters.
     - [ ] Case counts: monotonic counters a fixture exposes, read around each batch.
 - [ ] 9. Analysis. Done when a deliberate slowdown in a cds case is reported as a change and two runs of one build are not.
     - [ ] In `plumb/tools/`, Python. Reads the binary results file and devenv's `env.json`. Writes `results.json`.

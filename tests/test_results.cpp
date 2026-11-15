@@ -25,10 +25,10 @@ plumb::Repetition rep(std::size_t round, double first) {
     raw.header.throttles  = 0;
     raw.header.temp_start = 48.5;
     raw.header.temp_end   = 51;
-    raw.header.cycles     = 9e6;
-    raw.header.ref_cycles = 8e6;
     for (int i = 0; i < 30; ++i) raw.ns.push_back(first + i);
     raw.header.count = raw.ns.size();
+    for (int i = 0; i < 30; ++i)
+        raw.counts.push_back({.cycles = 100.0 + i, .ref_cycles = 90.0 + i, .instructions = 50});
     return plumb::fold(raw, round);
 }
 
@@ -95,7 +95,7 @@ TEST(Results, OtherVersion) {
     f.seekp(8);
     f.write("\x09\0\0\0", 4);
     f.close();
-    expect_refused(path, "results version 9, expected 3");
+    expect_refused(path, "results version 9, expected 4");
 }
 
 TEST(Results, Truncated) {
@@ -118,10 +118,12 @@ TEST(Results, BadBucket) {
     r.cases[0].reps.resize(1);
     auto path = temp_file("results_bucket");
     ASSERT_TRUE(plumb::write_results(path, r));
-    // The last rep ends with its windows, before them its histogram's last bucket.
+    // The last rep ends with its windows and bucket counts, before them its histogram's last
+    // bucket.
     std::fstream f(path, std::ios::in | std::ios::out | std::ios::binary);
-    auto         windows = 8 + r.cases[0].reps[0].windows.size() * 8;
-    f.seekp(-static_cast<std::streamoff>(windows + 8 + 4), std::ios::end);
+    const auto&  rep  = r.cases[0].reps[0];
+    auto         tail = 8 + rep.windows.size() * 8 + 8 + rep.counts.size() * 32;
+    f.seekp(-static_cast<std::streamoff>(tail + 8 + 4), std::ios::end);
     f.write("\xff\xff\xff\x7f", 4);
     f.close();
     expect_refused(path, "bad bucket");

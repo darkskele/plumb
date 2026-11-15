@@ -48,7 +48,7 @@ struct Results {
 };
 
 inline constexpr std::array<char, 8> results_magic   = {'p', 'l', 'u', 'm', 'b', 'r', 'e', 's'};
-inline constexpr std::uint32_t       results_version = 3;
+inline constexpr std::uint32_t       results_version = 4;
 
 namespace detail {
 
@@ -131,6 +131,11 @@ inline void put(Out& out, const Repetition& rep) {
     put(out, rep.histogram);
     out.put(std::uint64_t{rep.windows.size()});
     for (double w : rep.windows) out.put(w);
+    out.put(std::uint64_t{rep.counts.size()});
+    for (const BucketCounts& b : rep.counts) {
+        out.put(b.counted);
+        out.put(b.sum);
+    }
 }
 
 }  // namespace detail
@@ -220,6 +225,11 @@ inline std::expected<Results, std::string> read_results(const std::filesystem::p
 
             rep.windows.resize(in.length(8));
             for (double& w : rep.windows) w = in.get<double>();
+            rep.counts.resize(in.length(8 + sizeof(CounterReading)));
+            for (BucketCounts& b : rep.counts) {
+                b.counted = in.get<std::uint64_t>();
+                b.sum     = in.get<CounterReading>();
+            }
         }
     }
     if (in.short_) return std::unexpected(std::format("{}: truncated", where));

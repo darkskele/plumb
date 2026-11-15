@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
+#include "plumb/counters.hpp"
 #include "plumb/histogram.hpp"
 #include "plumb/raw.hpp"
 #include "plumb/summary.hpp"
@@ -22,14 +24,25 @@ struct Figures {
     bool operator==(const Figures&) const = default;
 };
 
+/// @brief A histogram bucket's batches that were counted throughout, and their per op counts
+/// added up.
+struct BucketCounts {
+    std::uint64_t  counted;
+    CounterReading sum;
+
+    bool operator==(const BucketCounts&) const = default;
+};
+
 /// @brief One repetition once its samples are gone. Exact figures, a histogram of per op
-/// picoseconds, and the p50 per op in nanoseconds of each drift window, in time order.
+/// picoseconds, the p50 per op in nanoseconds of each drift window in time order, and the counts
+/// of each filled bucket in bucket order, none when the raw file had none.
 struct Repetition {
-    std::size_t         round;
-    RawHeader           header;
-    Figures             figures;
-    Histogram           histogram;
-    std::vector<double> windows;
+    std::size_t               round;
+    RawHeader                 header;
+    Figures                   figures;
+    Histogram                 histogram;
+    std::vector<double>       windows;
+    std::vector<BucketCounts> counts = {};
 
     bool operator==(const Repetition&) const = default;
 };
@@ -41,8 +54,8 @@ inline constexpr std::size_t drift_windows = 10;
 }  // namespace detail
 
 /// @brief Folds repetition `round` from its raw file's contents.
-inline Repetition fold(const Raw& raw, std::size_t round) pre(!raw.ns.empty())
-    pre(raw.header.n > 0) {
+inline Repetition fold(const Raw& raw, std::size_t round) pre(!raw.ns.empty()) pre(raw.header.n > 0)
+    pre(raw.counts.empty() || raw.counts.size() == raw.ns.size()) {
     auto                n = static_cast<double>(raw.header.n);
     std::vector<double> per_op;
     per_op.reserve(raw.ns.size());
@@ -51,6 +64,21 @@ inline Repetition fold(const Raw& raw, std::size_t round) pre(!raw.ns.empty())
     Repetition rep{
         .round = round, .header = raw.header, .figures = {}, .histogram = {}, .windows = {}};
     for (double ns : per_op) rep.histogram.record(std::llround(ns * 1000));
+
+    if (!raw.counts.empty()) {
+        std::vector<BucketCounts> by_bucket(Histogram::buckets, BucketCounts{0, {0, 0, 0}});
+        for (std::size_t i = 0; i < per_op.size(); ++i) {
+            auto        ps = std::llround(per_op[i] * 1000);
+            const auto& c  = raw.counts[i];
+            if (ps < 0 || std::isnan(c.cycles)) continue;
+            auto& b = by_bucket[Histogram::index(ps)];
+            ++b.counted;
+            b.sum.cycles += c.cycles / n;
+            b.sum.ref_cycles += c.ref_cycles / n;
+            b.sum.instructions += c.instructions / n;
+        }
+        for (auto [i, count] : rep.histogram.filled()) rep.counts.push_back(by_bucket[i]);
+    }
 
     // Consecutive slices of the batches, as even as the count allows.
     std::size_t windows = std::min(detail::drift_windows, per_op.size());

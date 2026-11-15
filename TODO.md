@@ -8,7 +8,7 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
     - [ ] halln `feature/rigStability` lands as it is. Its `diff.py` and `noise.py` are the reference for step 9.
     - [ ] cds `feature/benchInfra` does not land its `benchmarks/support` headers (`tsc.hpp`, `histogram.hpp`, `build_info.hpp`) or the latency harness in cds. They seed plumb in steps 3 and 7. Its `pin.hpp` stays in cds for fixtures that start threads. Its `tools/bench` changes may land, they are retired in step 12.
 - [ ] 8. Readings from the machine. Done when a box run carries every counter column and a WSL run carries the same columns as NaN.
-    - [ ] PMU counting phases: `perf_event_open` once, `rdpmc` around each batch, a phase per set that fits. The default set, `ipc` derived, NaN where the PMU cannot count. Pinned to one core type on a hybrid CPU.
+    - [ ] More events, a set per phase that fits the general counters.
     - [ ] Case counts: monotonic counters a fixture exposes, read around each batch.
 - [ ] 9. Analysis. Done when a deliberate slowdown in a cds case is reported as a change and two runs of one build are not.
     - [ ] In `plumb/tools/`, Python. Reads the binary results file and devenv's `env.json`. Writes `results.json`.

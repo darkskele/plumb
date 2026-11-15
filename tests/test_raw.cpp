@@ -47,19 +47,15 @@ TEST(Raw, ConvertsTicksToNs) {
     auto b = plumb::detail::run_batches<Counter, decltype(count_op)>(plumb::keep, 8, 16, no_warmup);
     auto raw = plumb::to_raw(b, clock, false);
 
-    EXPECT_EQ(raw.header.version, 5u);
+    EXPECT_EQ(raw.header.version, 6u);
     EXPECT_EQ(raw.header.tsc_invariant, 0u);
     EXPECT_EQ(raw.header.measured, 0u);
     EXPECT_EQ(raw.header.n, 8u);
     EXPECT_EQ(raw.header.count, 16u);
     EXPECT_EQ(raw.header.cpu_start, b.cpu_start);
     EXPECT_EQ(raw.header.cpu_end, b.cpu_end);
-    EXPECT_EQ(std::bit_cast<std::uint64_t>(raw.header.cycles),
-              std::bit_cast<std::uint64_t>(b.counters.cycles));
-    EXPECT_EQ(std::bit_cast<std::uint64_t>(raw.header.ref_cycles),
-              std::bit_cast<std::uint64_t>(b.counters.ref_cycles));
-    EXPECT_EQ(std::bit_cast<std::uint64_t>(raw.header.instructions),
-              std::bit_cast<std::uint64_t>(b.counters.instructions));
+    EXPECT_EQ(raw.header.counter_cost, b.counter_cost);
+    EXPECT_EQ(raw.counts, b.counts);
     EXPECT_TRUE(std::isnan(raw.header.throttles));
     EXPECT_TRUE(std::isnan(raw.header.temp_start));
     EXPECT_TRUE(std::isnan(raw.header.temp_end));
@@ -91,7 +87,8 @@ TEST(Raw, RoundTrips) {
     auto raw  = sample_raw();
     auto path = temp_file("round_trip");
     ASSERT_TRUE(plumb::write_raw(path, raw));
-    EXPECT_EQ(fs::file_size(path), sizeof(plumb::RawHeader) + 16 * sizeof(double));
+    EXPECT_EQ(fs::file_size(path),
+              sizeof(plumb::RawHeader) + 16 * sizeof(double) + 16 * sizeof(plumb::CounterReading));
 
     auto back = plumb::read_raw(path);
     ASSERT_TRUE(back) << back.error();
