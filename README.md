@@ -23,6 +23,7 @@ Judgement
 
 Ease of use
 - A case is a fixture type and an op, one variable in a bench file. No macro, no class, no CMake edit.
+- A fixture's own stats are its own to keep and report, from its reset or destructor. plumb records none.
 - One bench binary per repo. The binary knows nothing of its environment.
 
 Assurance

@@ -4,11 +4,11 @@ How plumb is built, step by step. Each step's sub-goals are listed under it.
 
 ## Milestones
 
-Each step ends with something that builds and runs on WSL and on the box. The reference cases drive it: `spsc_push_int_1024` from step 6, the 64 KB TCP send from step 11.
+Each step ends with something that builds and runs on WSL and on the box. The reference cases drive it: `spsc_push_int_1024` from step 6, the 64 KB TCP send from step 12.
 
 - [ ] 0. Before plumb exists
-    - [ ] halln `feature/rigStability` lands as it is. Its `diff.py` and `noise.py` are the reference for step 9.
-    - [ ] cds `feature/benchInfra` does not land its `benchmarks/support` headers (`tsc.hpp`, `histogram.hpp`, `build_info.hpp`) or the latency harness in cds. They seed plumb in steps 3 and 7. Its `pin.hpp` stays in cds for fixtures that start threads. Its `tools/bench` changes may land, they are retired in step 12.
+    - [ ] halln `feature/rigStability` lands as it is. Its `diff.py` and `noise.py` are the reference for step 10.
+    - [ ] cds `feature/benchInfra` does not land its `benchmarks/support` headers (`tsc.hpp`, `histogram.hpp`, `build_info.hpp`) or the latency harness in cds. They seed plumb in steps 3 and 7. Its `pin.hpp` stays in cds for fixtures that start threads. Its `tools/bench` changes may land, they are retired in step 13.
 - [x] ~~1. Repo. Done when an empty `plumb_tests` builds and runs through `boxrun`.~~
     - [x] ~~`~/quant/plumb`, a bare repo with worktrees like the others.~~
     - [x] ~~CMake: `plumb::plumb`, header-only `INTERFACE`, and `plumb::main`, the one source a consumer compiles in. Presets `release`, `debug`, `tsan`. C++26, GCC 16. GoogleTest for plumb's own tests.~~
@@ -51,27 +51,32 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~Run fields: seed, TSC rate, start time, rounds. Case fields: plan, calibration, why each void child was void. Repetition fields: round, stamp cost, the CPU at its start and end. Raw version 3. Build and environment are the analysis's to join.~~
     - [x] ~~A build without optimisation or with a sanitizer is warned of.~~
     - [x] ~~A summary table on the console.~~
-- [ ] 8. Readings from the machine. Done when a box run carries every counter column and a WSL run carries the same columns as NaN.
+- [x] ~~8. Readings from the machine. Done when a box run carries every counter column and a run with no PMU carries the same columns as NaN.~~
     - [x] ~~Throttle counters and package temperature around each repetition. A repetition that throttled is void. Raw version 4, results version 2.~~
     - [x] ~~Cycles, reference cycles and instructions per batch: `perf_event_open` once, `rdpmc` around each batch outside the stamps, reset left out. On the core type the repetition starts on, NaN for a batch not counted throughout. The counts of an empty batch recorded, never subtracted.~~
     - [x] ~~Counts per op added up per latency bucket in the results, so counts line up with latencies. Raw version 6, results version 4.~~
     - [x] ~~Held frequency from cycles over reference cycles.~~
-    - [ ] More events, a set per phase that fits the general counters.
-    - [ ] Case counts: monotonic counters a fixture exposes, read around each batch.
-- [ ] 9. Analysis. Done when a deliberate slowdown in a cds case is reported as a change and two runs of one build are not.
+    - [x] ~~A fixture's own stats are its own to keep and report. plumb records none.~~
+- [ ] 9. Profile. Done when one short command runs a case under `perf stat` counting only its timed batches, its instructions matching plumb's own count.
+    - [ ] Release builds carry debug info, so `perf annotate` maps to source.
+    - [ ] `--perf stat` or `--perf record` with `--run NAME`. The binary re-executes itself in-process under perf, counting off until the timed batches start and off again after. Extra perf arguments after `--`.
+    - [ ] Under perf, plumb opens no counters of its own and its counts are NaN.
+    - [ ] No `perf` on the path is an error that says so.
+- [ ] 10. Analysis. Done when a deliberate slowdown in a cds case is reported as a change and two runs of one build are not.
     - [ ] In `plumb/tools/`, Python. Reads the binary results file and devenv's `env.json`. Writes `results.json`.
     - [ ] Floor, from halln's `noise.py`: each run's own floor from the spread of its repetitions, and two runs of one build, the larger.
     - [ ] A/B diff, from halln's `diff.py`: past the floor, outside both runs' spread, confirmed by a rerun. Refused when the identities differ. cds's suite-shift correction only for runs with no floor.
     - [ ] Stamp cost removal, an option, from the run's recorded stamp cost.
     - [ ] Markdown and plots, from halln's `to_md.py` and `plots.py` and cds's `bench_to_md.py`.
-- [ ] 10. cds, the first consumer. Done when every cds bench has a plumb case and its results sit beside the gbench figures they replace.
+    - [ ] Cases whose slow buckets stalled, more cycles per instruction than their fast ones, flagged. A command that profiles a flagged case through the binary's `--perf`.
+- [ ] 11. cds, the first consumer. Done when every cds bench has a plumb case and its results sit beside the gbench figures they replace.
     - [ ] plumb as `extern/plumb` in cds. `benchmarks/**/bench_*.cpp` globbed into `cds_plumb`.
     - [ ] Port the latency harness and the gbench queue benches as cases.
     - [ ] devenv VS Code entries for `cds_plumb`. A run on the box through `boxrun -x`.
-- [ ] 11. halln. Done when the halln cases reproduce the sweep's figures within its noise floor.
+- [ ] 12. halln. Done when the halln cases reproduce the sweep's figures within its noise floor.
     - [ ] plumb in halln. The rig as a fixture: roles started and warmed in its constructor, the receiver's stamp handed back through shared memory, its rig file through `HALLN_RIG`.
     - [ ] Port the rig's workloads as cases.
-- [ ] 12. Retire. Done when a release is tagged.
+- [ ] 13. Retire. Done when a release is tagged.
     - [ ] cds: `tools/bench`, Google Benchmark and its FetchContent, `bench_results.json`.
     - [ ] halln: `tools/netbench`'s sweep, diff, noise and report. Rig code stays as fixtures.
     - [ ] `BENCHMARKS.md` in each repo written by plumb's tools.
