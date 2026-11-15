@@ -3,13 +3,16 @@
 #include <sched.h>
 
 #include <chrono>
+#include <cmath>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <type_traits>
 #include <vector>
 
 #include "plumb/clock.hpp"
+#include "plumb/counters.hpp"
 #include "plumb/fixture.hpp"
 #include "plumb/summary.hpp"
 
@@ -53,33 +56,63 @@ struct Warmup {
     std::size_t              batches = 10;
 };
 
-/// @brief One repetition's raw record. A figure per batch of `n` ops, the stamp cost, and the CPU
-/// before the first counted batch and after the last, -1 when unknown. Figures are ticks, or
-/// nanoseconds when `measured`.
+/// @brief One repetition's raw record. A figure and hardware counts per batch of `n` ops, the stamp
+/// cost, the mean counts of an empty batch, and the CPU before the first counted batch and after
+/// the last, -1 when unknown. Figures are ticks, or nanoseconds when `measured`.
 struct Batches {
-    std::size_t         n;
-    bool                measured;
-    Summary             stamp_cost;
-    std::vector<double> figures;
-    int                 cpu_start = -1;
-    int                 cpu_end   = -1;
+    std::size_t                 n;
+    bool                        measured;
+    Summary                     stamp_cost;
+    std::vector<double>         figures;
+    std::vector<CounterReading> counts       = {};
+    CounterReading              counter_cost = {.cycles = std::numeric_limits<double>::quiet_NaN(),
+                                                .ref_cycles = std::numeric_limits<double>::quiet_NaN(),
+                                                .instructions = std::numeric_limits<double>::quiet_NaN()};
+    int                         cpu_start    = -1;
+    int                         cpu_end      = -1;
 };
 
 /// @brief Reads per stamp cost measurement.
 inline constexpr std::size_t stamp_reads = 10'000;
 
-/// @brief Warmup, the stamp cost, then `count` batches of `n` ops, all on one fixture.
-/// The fixture is reset before every batch but the first.
+/// @brief Empty batches per counter cost measurement.
+inline constexpr std::size_t counter_reads = 1'000;
+
+/// @brief The mean counts of an empty batch of `F` and `O`, from the batches counted throughout.
+template <Fixture F, Op<F> O>
+CounterReading counter_cost(const Counters& counters, F& fixture) noexcept {
+    double      cycles = 0, ref_cycles = 0, instructions = 0;
+    std::size_t counted = 0;
+    for (std::size_t i = 0; i < counter_reads; ++i) {
+        auto a = counters.read();
+        (void)run_batch<F, O>(fixture, 0);
+        auto c = detail::counted(a, counters.read());
+        if (std::isnan(c.cycles)) continue;
+        cycles += c.cycles;
+        ref_cycles += c.ref_cycles;
+        instructions += c.instructions;
+        ++counted;
+    }
+    if (counted == 0) return detail::counted({.ok = false}, {.ok = false});
+    auto n = static_cast<double>(counted);
+    return {.cycles = cycles / n, .ref_cycles = ref_cycles / n, .instructions = instructions / n};
+}
+
+/// @brief Warmup, the stamp and counter costs, then `count` batches of `n` ops, all on one
+/// fixture, each counted on `counters`. The fixture is reset before every batch but the first.
 /// @tparam F The fixture type.
 /// @tparam O The op type.
 template <Fixture F, Op<F> O>
-Batches run_batches(Reset<F> reset, std::size_t n, std::size_t count, Warmup warmup = {}) noexcept
-    pre(n > 0) pre(count > 0) {
+Batches run_batches(Reset<F> reset, std::size_t n, std::size_t count, Warmup warmup = {},
+                    Counters counters = Counters::open()) noexcept pre(n > 0) pre(count > 0) {
     F    fixture{};
-    bool first = true;
-    auto batch = [&] {
+    bool first   = true;
+    auto prepare = [&] {
         if (!first) reset.fn(fixture);
         first = false;
+    };
+    auto batch = [&] {
+        prepare();
         return run_batch<F, O>(fixture, n);
     };
 
@@ -92,9 +125,16 @@ Batches run_batches(Reset<F> reset, std::size_t n, std::size_t count, Warmup war
                 .measured   = self_measured<O, F>,
                 .stamp_cost = TscClock::stamp_cost(stamp_reads),
                 .figures    = {}};
+    out.counter_cost = counter_cost<F, O>(counters, fixture);
     out.figures.reserve(count);
+    out.counts.reserve(count);
     out.cpu_start = sched_getcpu();
-    for (std::size_t i = 0; i < count; ++i) out.figures.push_back(batch());
+    for (std::size_t i = 0; i < count; ++i) {
+        prepare();
+        auto a = counters.read();
+        out.figures.push_back(run_batch<F, O>(fixture, n));
+        out.counts.push_back(counted(a, counters.read()));
+    }
     out.cpu_end = sched_getcpu();
     return out;
 }

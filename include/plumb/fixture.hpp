@@ -10,7 +10,8 @@
 
 namespace plumb {
 
-/// @brief What a case measures around. Built with no arguments, destroyed without throwing.
+/// @brief What a case measures around. Built with no arguments, destroyed without throwing. Any
+/// stats it keeps are its own to report, from its reset or destructor.
 template <class F>
 concept Fixture = std::is_object_v<F> && !std::is_const_v<F> && std::default_initializable<F> &&
                   std::is_nothrow_destructible_v<F>;

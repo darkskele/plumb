@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <expected>
@@ -12,6 +13,7 @@
 #include <vector>
 
 #include "plumb/cli.hpp"
+#include "plumb/machine.hpp"
 #include "plumb/plan.hpp"
 #include "plumb/raw.hpp"
 #include "plumb/results.hpp"
@@ -362,6 +364,10 @@ TEST(Cli, ChildRunsOneRepetitionSilentlyAtTheGivenRate) {
     EXPECT_EQ(raw->header.n, 16u);
     EXPECT_EQ(raw->header.count, 40u);
     EXPECT_EQ(raw->header.ghz, 2.5);
+    auto now = plumb::read_machine();
+    EXPECT_EQ(std::isnan(raw->header.throttles), std::isnan(now.throttles));
+    EXPECT_EQ(std::isnan(raw->header.temp_start), std::isnan(now.temp_c));
+    EXPECT_EQ(std::isnan(raw->header.temp_end), std::isnan(now.temp_c));
 }
 
 TEST(Cli, ChildUnknownCaseStops) {

@@ -19,6 +19,7 @@
 
 #include "plumb/abandon.hpp"
 #include "plumb/fold.hpp"
+#include "plumb/machine.hpp"
 #include "plumb/plan.hpp"
 #include "plumb/process.hpp"
 #include "plumb/raw.hpp"
@@ -168,6 +169,7 @@ inline int run_parent(std::span<const Entry* const> cases, const std::filesystem
                           [&](const std::filesystem::path& f) -> std::optional<std::string> {
                               auto rep = detail::fold_file(f, r, keep_raw);
                               if (!rep) return rep.error();
+                              if (auto why = detail::machine_void(rep->header)) return why;
                               p.reps.push_back(std::move(*rep));
                               return {};
                           });
