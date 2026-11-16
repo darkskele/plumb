@@ -1,7 +1,7 @@
 # plumb_add_bench(<target> [EXCLUDE_FROM_ALL] <sources>...)
 #
 # One bench binary from the given bench files, linked with plumb's main.
-# The build fails when two cases share a name.
+# The build fails when two cases share a name. Built with debug info in every build.
 # Debug builds link with LTO, so two different types sharing a name across files fail the link.
 function(plumb_add_bench target)
     cmake_parse_arguments(PARSE_ARGV 1 arg "EXCLUDE_FROM_ALL" "" "")
@@ -11,6 +11,9 @@ function(plumb_add_bench target)
         add_executable(${target} ${arg_UNPARSED_ARGUMENTS})
     endif()
     target_link_libraries(${target} PRIVATE plumb::main)
+
+    # Debug info in every build, so a profiler maps samples to source lines.
+    target_compile_options(${target} PRIVATE -g)
 
     add_custom_command(TARGET ${target} POST_BUILD COMMAND $<TARGET_FILE:${target}> --check)
 

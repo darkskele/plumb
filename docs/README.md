@@ -57,18 +57,17 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~Counts per op added up per latency bucket in the results, so counts line up with latencies. Raw version 6, results version 4.~~
     - [x] ~~Held frequency from cycles over reference cycles.~~
     - [x] ~~A fixture's own stats are its own to keep and report. plumb records none.~~
-- [ ] 9. Profile. Done when one short command runs a case under `perf stat` counting only its timed batches, its instructions matching plumb's own count.
-    - [ ] Release builds carry debug info, so `perf annotate` maps to source.
-    - [ ] `--perf stat` or `--perf record` with `--run NAME`. The binary re-executes itself in-process under perf, counting off until the timed batches start and off again after. Extra perf arguments after `--`.
-    - [ ] Under perf, plumb opens no counters of its own and its counts are NaN.
-    - [ ] No `perf` on the path is an error that says so.
+- [x] ~~9. Profile. Done when `perf record` over a run of one case puts its samples in that case's `run_batch`, mapped to source lines.~~
+    - [x] ~~Bench binaries carry debug info in every build, so `perf annotate` maps to source.~~
+    - [x] ~~A box check: `perf record` over `--run NAME --in-process` samples that case's `run_batch` most and no other case's, its op mapped to its bench file.~~
 - [ ] 10. Analysis. Done when a deliberate slowdown in a cds case is reported as a change and two runs of one build are not.
     - [ ] In `plumb/tools/`, Python. Reads the binary results file and devenv's `env.json`. Writes `results.json`.
     - [ ] Floor, from halln's `noise.py`: each run's own floor from the spread of its repetitions, and two runs of one build, the larger.
     - [ ] A/B diff, from halln's `diff.py`: past the floor, outside both runs' spread, confirmed by a rerun. Refused when the identities differ. cds's suite-shift correction only for runs with no floor.
     - [ ] Stamp cost removal, an option, from the run's recorded stamp cost.
     - [ ] Markdown and plots, from halln's `to_md.py` and `plots.py` and cds's `bench_to_md.py`.
-    - [ ] Cases whose slow buckets stalled, more cycles per instruction than their fast ones, flagged. A command that profiles a flagged case through the binary's `--perf`.
+    - [ ] Cases whose slow buckets stalled, more cycles per instruction than their fast ones, flagged.
+    - [ ] Profile a case: `perf record` over a run of it, samples kept only in its `run_batch`, split per instruction into op, loop and stamps, and per repetition by process.
 - [ ] 11. cds, the first consumer. Done when every cds bench has a plumb case and its results sit beside the gbench figures they replace.
     - [ ] plumb as `extern/plumb` in cds. `benchmarks/**/bench_*.cpp` globbed into `cds_plumb`.
     - [ ] Port the latency harness and the gbench queue benches as cases.
