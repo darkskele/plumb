@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cstddef>
@@ -11,8 +12,10 @@
 #include <format>
 #include <fstream>
 #include <iterator>
+#include <meta>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -47,13 +50,160 @@ struct Results {
     bool operator==(const Results&) const = default;
 };
 
-inline constexpr std::array<char, 8> results_magic   = {'p', 'l', 'u', 'm', 'b', 'r', 'e', 's'};
-inline constexpr std::uint32_t       results_version = 4;
+inline constexpr std::array<char, 8> results_magic = {'p', 'l', 'u', 'm', 'b', 'r', 'e', 's'};
+/// @brief How values are encoded. The layout of the values is the schema each file carries.
+inline constexpr std::uint32_t results_version = 6;
+
+/// @brief A filled histogram bucket as stored. Its values from `lower` to `upper` picoseconds.
+struct StoredBucket {
+    std::int64_t  lower;
+    std::int64_t  upper;
+    std::uint64_t count;
+};
+
+/// @brief A histogram as stored. Its smallest and largest values are 0 when nothing was counted.
+struct StoredHistogram {
+    std::uint64_t             negative;
+    std::int64_t              min;
+    std::int64_t              max;
+    std::vector<StoredBucket> buckets;
+};
+
+/// @brief How a type is stored when not member by member. None unless specialised.
+/// @tparam T The type in memory.
+template <class T>
+struct Stored {};
+
+template <>
+struct Stored<Histogram> {
+    using type = StoredHistogram;
+
+    static StoredHistogram to(const Histogram& h) {
+        StoredHistogram s{.negative = h.negative(),
+                          .min      = h.count() > 0 ? h.min() : 0,
+                          .max      = h.count() > 0 ? h.max() : 0,
+                          .buckets  = {}};
+        h.each([&](std::int64_t lo, std::int64_t hi, std::uint64_t n) {
+            s.buckets.push_back({.lower = lo, .upper = hi, .count = n});
+        });
+        return s;
+    }
+
+    static std::expected<Histogram, std::string> from(const StoredHistogram& s) {
+        std::vector<Histogram::Bucket> filled;
+        filled.reserve(s.buckets.size());
+        for (auto [lo, hi, n] : s.buckets) {
+            auto i = lo < 0 ? Histogram::buckets : Histogram::index(lo);
+            if (i >= Histogram::buckets || Histogram::lower(i) != lo || Histogram::upper(i) != hi)
+                return std::unexpected(std::format("bad bucket {} to {}", lo, hi));
+            filled.emplace_back(i, n);
+        }
+        return Histogram(filled, s.negative, s.min, s.max);
+    }
+};
 
 namespace detail {
 
 static_assert(std::endian::native == std::endian::little,
               "results files are written in native byte order, which must be little-endian");
+
+template <class T>
+concept Restored = requires { typename Stored<T>::type; };
+
+template <class T>
+inline constexpr bool is_vector = false;
+template <class T>
+inline constexpr bool is_vector<std::vector<T>> = true;
+
+template <class T>
+inline constexpr bool is_array = false;
+template <class T, std::size_t N>
+inline constexpr bool is_array<std::array<T, N>> = true;
+
+template <class T>
+inline constexpr auto fields = std::define_static_array(
+    std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
+
+template <class T>
+consteval std::string_view scalar_name() {
+    if constexpr (std::same_as<T, bool>)
+        return "bool";
+    else if constexpr (std::same_as<T, char>)
+        return "char";
+    else if constexpr (std::same_as<T, double>)
+        return "f64";
+    else {
+        static_assert(std::is_integral_v<T>, "results store integers, bool, char and double");
+        constexpr std::array<std::string_view, 4> s{"i8", "i16", "i32", "i64"};
+        constexpr std::array<std::string_view, 4> u{"u8", "u16", "u32", "u64"};
+        constexpr auto                            at = std::bit_width(sizeof(T)) - 1;
+        return std::is_signed_v<T> ? s[at] : u[at];
+    }
+}
+
+/// @brief Each struct's line, `Name: field type, field type`, in the order first met.
+struct Schema {
+    std::vector<std::string> names;
+    std::vector<std::string> lines;
+};
+
+template <class T>
+std::string describe(Schema& s);
+
+template <class T>
+std::string describe_struct(Schema& s, std::string_view name) {
+    static_assert(std::is_aggregate_v<T>, "results store aggregates member by member");
+    if (std::ranges::contains(s.names, name)) return std::string(name);
+    auto at = s.lines.size();
+    s.names.emplace_back(name);
+    s.lines.emplace_back();
+    std::string line(name);
+    line += ':';
+    const char* sep = " ";
+    template for (constexpr auto m : fields<T>) {
+        using M                       = std::remove_cvref_t<typename[:std::meta::type_of(m):]>;
+        constexpr std::string_view id = std::meta::identifier_of(m);
+        line += std::format("{}{} {}", sep, id, describe<M>(s));
+        sep = ", ";
+    }
+    s.lines[at] = std::move(line);
+    return std::string(name);
+}
+
+template <class T>
+std::string describe(Schema& s) {
+    if constexpr (Restored<T>)
+        return describe_struct<typename Stored<T>::type>(s, std::meta::identifier_of(^^T));
+    else if constexpr (std::is_arithmetic_v<T>)
+        return std::string(scalar_name<T>());
+    else if constexpr (std::same_as<T, std::string>)
+        return "str";
+    else if constexpr (is_array<T>)
+        return std::format("{}[{}]", describe<typename T::value_type>(s), std::tuple_size_v<T>);
+    else if constexpr (is_vector<T>)
+        return "list<" + describe<typename T::value_type>(s) + ">";
+    else
+        return describe_struct<T>(s, std::meta::identifier_of(^^T));
+}
+
+/// @brief The fewest bytes a stored `T` takes.
+template <class T>
+consteval std::size_t least() {
+    if constexpr (Restored<T>)
+        return least<typename Stored<T>::type>();
+    else if constexpr (std::is_arithmetic_v<T>)
+        return sizeof(T);
+    else if constexpr (std::same_as<T, std::string> || is_vector<T>)
+        return 8;
+    else if constexpr (is_array<T>)
+        return std::tuple_size_v<T> * least<typename T::value_type>();
+    else {
+        std::size_t n = 0;
+        template for (constexpr auto m : fields<T>) n +=
+            least<std::remove_cvref_t<typename[:std::meta::type_of(m):]>>();
+        return n;
+    }
+}
 
 /// @brief Bytes written in order, little-endian.
 struct Out {
@@ -71,11 +221,13 @@ struct Out {
     }
 };
 
-/// @brief Bytes read in order. Reading past the end gives zeros and marks it short.
+/// @brief Bytes read in order. Reading past the end gives zeros and marks it short. A failure
+/// keeps its reason and stops the reading.
 struct In {
     std::string_view bytes;
     std::size_t      at     = 0;
     bool             short_ = false;
+    std::string      error  = {};
 
     template <class T>
         requires std::is_trivially_copyable_v<T>
@@ -108,61 +260,80 @@ struct In {
         at += n;
         return s;
     }
+
+    void fail(std::string why) {
+        if (error.empty()) error = std::move(why);
+        at = bytes.size();
+    }
 };
 
-inline void put(Out& out, const Histogram& h) {
-    auto filled = h.filled();
-    out.put(h.negative());
-    out.put(h.count() > 0 ? h.min() : std::int64_t{0});
-    out.put(h.count() > 0 ? h.max() : std::int64_t{0});
-    out.put(std::uint64_t{filled.size()});
-    for (auto [i, n] : filled) {
-        out.put(static_cast<std::uint32_t>(i));
-        out.put(n);
+template <class T>
+void put(Out& out, const T& v) {
+    if constexpr (Restored<T>)
+        put(out, Stored<T>::to(v));
+    else if constexpr (std::is_arithmetic_v<T>)
+        out.put(v);
+    else if constexpr (std::same_as<T, std::string>)
+        out.put(std::string_view(v));
+    else if constexpr (is_array<T>)
+        for (const auto& e : v) put(out, e);
+    else if constexpr (is_vector<T>) {
+        out.put(std::uint64_t{v.size()});
+        for (const auto& e : v) put(out, e);
+    } else {
+        template for (constexpr auto m : fields<T>) put(out, v.[:m:]);
     }
 }
 
-inline void put(Out& out, const Repetition& rep) {
-    out.put(std::uint64_t{rep.round});
-    out.put(rep.header);
-    for (double f :
-         {rep.figures.min, rep.figures.p50, rep.figures.p90, rep.figures.p99, rep.figures.max})
-        out.put(f);
-    put(out, rep.histogram);
-    out.put(std::uint64_t{rep.windows.size()});
-    for (double w : rep.windows) out.put(w);
-    out.put(std::uint64_t{rep.counts.size()});
-    for (const BucketCounts& b : rep.counts) {
-        out.put(b.counted);
-        out.put(b.sum);
+template <class T>
+void get(In& in, T& v) {
+    if constexpr (Restored<T>) {
+        typename Stored<T>::type s{};
+        get(in, s);
+        if (in.short_ || !in.error.empty()) return;
+        if (auto r = Stored<T>::from(s))
+            v = std::move(*r);
+        else
+            in.fail(std::move(r.error()));
+    } else if constexpr (std::same_as<T, bool>)
+        v = in.get<std::uint8_t>() != 0;
+    else if constexpr (std::is_arithmetic_v<T>)
+        v = in.get<T>();
+    else if constexpr (std::same_as<T, std::string>)
+        v = in.get_string();
+    else if constexpr (is_array<T>)
+        for (auto& e : v) get(in, e);
+    else if constexpr (is_vector<T>) {
+        v.resize(in.length(least<typename T::value_type>()));
+        for (auto& e : v) get(in, e);
+    } else {
+        template for (constexpr auto m : fields<T>) get(in, v.[:m:]);
     }
+}
+
+/// @brief The schema of a results file, a line per struct, `Results` first.
+inline const std::string& results_schema() {
+    static const std::string text = [] {
+        Schema s;
+        describe<Results>(s);
+        std::string out;
+        for (const auto& line : s.lines) out += line + '\n';
+        return out;
+    }();
+    return text;
 }
 
 }  // namespace detail
 
-/// @brief Writes `r` to `path`, replacing any file there.
+/// @brief Writes `r` to `path`, replacing any file there. The schema first, then the values in
+/// its order.
 inline std::expected<void, std::string> write_results(const std::filesystem::path& path,
                                                       const Results&               r) {
     detail::Out out;
     out.put(results_magic);
     out.put(results_version);
-    out.put(r.seed);
-    out.put(r.ghz);
-    out.put(std::uint8_t{r.tsc_invariant});
-    out.put(r.start_ns);
-    out.put(r.rounds);
-    out.put(std::uint64_t{r.cases.size()});
-    for (const CaseResult& c : r.cases) {
-        out.put(std::string_view(c.name));
-        out.put(std::uint64_t{c.calibration.plan.n});
-        out.put(std::uint64_t{c.calibration.plan.count});
-        out.put(c.calibration.batch_ns);
-        out.put(std::uint64_t{c.voids.size()});
-        for (const std::string& v : c.voids) out.put(std::string_view(v));
-        out.put(std::uint8_t{c.dropped});
-        out.put(std::uint64_t{c.reps.size()});
-        for (const Repetition& rep : c.reps) detail::put(out, rep);
-    }
+    out.put(std::string_view(detail::results_schema()));
+    detail::put(out, r);
 
     detail::File f{std::fopen(path.c_str(), "wb")};
     if (!f) return std::unexpected(std::format("cannot open {} to write", path.string()));
@@ -172,7 +343,8 @@ inline std::expected<void, std::string> write_results(const std::filesystem::pat
     return {};
 }
 
-/// @brief Reads the results at `path`, refusing a file that is damaged or of another version.
+/// @brief Reads the results at `path`, refusing a file that is damaged, of another version, or of
+/// another schema than this build's.
 inline std::expected<Results, std::string> read_results(const std::filesystem::path& path) {
     auto          where = path.string();
     std::ifstream f(path, std::ios::binary);
@@ -185,53 +357,12 @@ inline std::expected<Results, std::string> read_results(const std::filesystem::p
     if (auto v = in.get<std::uint32_t>(); v != results_version)
         return std::unexpected(
             std::format("{}: results version {}, expected {}", where, v, results_version));
+    if (in.get_string() != detail::results_schema() && !in.short_)
+        return std::unexpected(std::format("{}: results schema differs from this build's", where));
 
     Results r{};
-    r.seed          = in.get<std::uint64_t>();
-    r.ghz           = in.get<double>();
-    r.tsc_invariant = in.get<std::uint8_t>() != 0;
-    r.start_ns      = in.get<std::int64_t>();
-    r.rounds        = in.get<std::uint64_t>();
-    r.cases.resize(in.length(1));
-    for (CaseResult& c : r.cases) {
-        c.name                   = in.get_string();
-        c.calibration.plan.n     = in.get<std::uint64_t>();
-        c.calibration.plan.count = in.get<std::uint64_t>();
-        c.calibration.batch_ns   = in.get<double>();
-        c.voids.resize(in.length(8));
-        for (std::string& v : c.voids) v = in.get_string();
-        c.dropped = in.get<std::uint8_t>() != 0;
-        c.reps.resize(in.length(1));
-        for (Repetition& rep : c.reps) {
-            rep.round   = in.get<std::uint64_t>();
-            rep.header  = in.get<RawHeader>();
-            rep.figures = {.min = in.get<double>(),
-                           .p50 = in.get<double>(),
-                           .p90 = in.get<double>(),
-                           .p99 = in.get<double>(),
-                           .max = in.get<double>()};
-
-            auto                           negative = in.get<std::uint64_t>();
-            auto                           min      = in.get<std::int64_t>();
-            auto                           max      = in.get<std::int64_t>();
-            std::vector<Histogram::Bucket> filled(in.length(12));
-            for (auto& [i, n] : filled) {
-                i = in.get<std::uint32_t>();
-                n = in.get<std::uint64_t>();
-                if (i >= Histogram::buckets)
-                    return std::unexpected(std::format("{}: bad bucket {}", where, i));
-            }
-            rep.histogram = Histogram(filled, negative, min, max);
-
-            rep.windows.resize(in.length(8));
-            for (double& w : rep.windows) w = in.get<double>();
-            rep.counts.resize(in.length(8 + sizeof(CounterReading)));
-            for (BucketCounts& b : rep.counts) {
-                b.counted = in.get<std::uint64_t>();
-                b.sum     = in.get<CounterReading>();
-            }
-        }
-    }
+    detail::get(in, r);
+    if (!in.error.empty()) return std::unexpected(std::format("{}: {}", where, in.error));
     if (in.short_) return std::unexpected(std::format("{}: truncated", where));
     if (in.at != bytes.size()) return std::unexpected(std::format("{}: trailing bytes", where));
     return r;
