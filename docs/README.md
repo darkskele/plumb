@@ -61,14 +61,14 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~Bench binaries carry debug info in every build, so `perf annotate` maps to source.~~
     - [x] ~~A box check: `perf record` over `--run NAME --in-process` samples that case's `run_batch` most and no other case's, its op mapped to its bench file.~~
 - [ ] 10. Analysis. Done when a deliberate slowdown in a cds case is reported as a change and two runs of one build are not.
-    - [ ] In `plumb/tools/`, Python. Reads `results.bin` and an environment file in a format plumb documents, every field optional.
+    - [x] ~~In `plumb/tools/`, Python. Reads `results.bin` and an environment file in a format plumb documents, every field optional.~~
     - [x] ~~Each histogram bucket stored with its bounds in picoseconds, so the tools never rebuild the histogram. Results version 5.~~
     - [x] ~~The results file carries its schema, a line per struct written by reflection from the C++ structs. The tools read any results file by its schema, so the layout is defined once. Results version 6.~~
-    - [ ] `BENCHMARKS.md` for one run. A header with the measured commit, the run's fields and its warnings. A summary table, each figure the median across repetitions with their range. Overview plots of the same, grouped by the decade of p50, at most 8 cases each. Per case details folded.
-    - [ ] The spread between repetitions shown per case.
-    - [ ] Stamp share per case, and each repetition's stamp cost plotted. Subtraction an option, off by default.
-    - [ ] `--note TEXT` under the title.
-    - [ ] A demo bench of cases across the decades, its report plumb's own `BENCHMARKS.md`, checked on the box.
+    - [x] ~~`BENCHMARKS.md` for one run. A header with the measured commit, the run's fields and its warnings. A summary table, each figure the median across repetitions with their range. Overview plots of the same, grouped by the decade of p50, at most 8 cases each. Per case details folded.~~
+    - [x] ~~The spread between repetitions shown per case. In the table the range of the repetition p50s over their median, flagged over 5%. In the overview a bar from the lowest repetition to the highest at each figure. Per case a line per repetition through its figures, p99.9 and p99.99 recorded with the rest. Drift within a repetition in the table, plotted when over 5%.~~
+    - [x] ~~Stamp share per case, and each repetition's stamp cost plotted. Subtraction an option, off by default.~~
+    - [x] ~~`--note TEXT` under the title.~~
+    - [x] ~~A demo bench of cases across the decades, its report plumb's own `BENCHMARKS.md`, checked on the box.~~
     - [ ] A/B from the spread of each run's repetitions, from halln's `diff.py`. Environment differences listed, never refused.
     - [ ] Cases whose slow buckets stalled, more cycles per instruction than their fast ones, flagged.
     - [ ] Profile a case: `perf record` over a run of it, samples kept only in its `run_batch`, split per instruction into op, loop and stamps, and per repetition by process.
