@@ -1,4 +1,3 @@
-import json
 import math
 from pathlib import Path
 
@@ -86,7 +85,7 @@ def test_numbers_keep_three_figures():
 
 def test_the_report_names_the_commit_the_note_and_every_case(run, tmp_path):
     env = {"commit": "abc1234-dirty", "machine": "LATITUDE"}
-    md = report.render(run, env, "Dummy cases.", False, tmp_path)
+    md = report.render({"demo": run}, env, "Dummy cases.", False, tmp_path)
     lines = md.splitlines()
     assert lines[:3] == ["# Benchmarks", "", "Dummy cases."]
     assert "- Commit: `abc1234-dirty`" in lines
@@ -96,7 +95,7 @@ def test_the_report_names_the_commit_the_note_and_every_case(run, tmp_path):
 
 
 def test_the_report_warns_of_voids_drops_moves_and_spread(run, tmp_path):
-    md = report.render(run, {}, None, False, tmp_path)
+    md = report.render({"demo": run}, {}, None, False, tmp_path)
     assert "`push` had 1 void: repetition 1: killed by SIGABRT." in md
     assert "`crash` dropped, void every time: calibration: killed by SIGSEGV." in md
     assert "Repetitions that moved CPU: `push` 2 of 2." in md
@@ -105,32 +104,28 @@ def test_the_report_warns_of_voids_drops_moves_and_spread(run, tmp_path):
 
 
 def test_the_report_writes_its_plots(run, tmp_path):
-    md = report.render(run, {}, None, False, tmp_path)
+    md = report.render({"demo": run}, {}, None, False, tmp_path)
     for name in ("overview_0.png", "case_push.png", "case_push_counts.png"):
         assert (tmp_path / "benchmarks" / name).stat().st_size > 0
         assert f"(benchmarks/{name})" in md
 
 
-def test_main_writes_benchmarks_md(tmp_path):
-    run = tmp_path / "run"
-    run.mkdir()
-    (run / "results.bin").write_bytes(GOLDEN.read_bytes())
-    env = tmp_path / "env.json"
-    env.write_text(json.dumps({"commit": "abc1234"}))
-    assert report.main([str(run), "--env", str(env), "--note", "hi"]) == 0
-    assert "- Commit: `abc1234`" in (run / "BENCHMARKS.md").read_text()
+def test_each_benchs_run_is_named_in_the_header(run, tmp_path):
+    md = report.render({"a": run, "b": run}, {}, None, False, tmp_path)
+    assert "- Run `a`: 2025-11-01T12:26:40Z, 2 rounds, seed 7, TSC 2.400 GHz" in md
+    assert "- Run `b`:" in md
 
 
-def test_main_refuses_a_missing_run(tmp_path, capsys):
-    assert report.main([str(tmp_path)]) == 1
-    assert "cannot open" in capsys.readouterr().out
+def test_the_ab_section_follows_the_summary(run, tmp_path):
+    md = report.render({"demo": run}, {}, None, False, tmp_path, ["## A/B", ""])
+    assert md.index("## Summary") < md.index("## A/B") < md.index("## Overview")
 
 
 def test_plots_land_only_in_their_folder_and_stale_ones_go(run, tmp_path):
     stale = tmp_path / report.PLOTS / "case_gone.png"
     stale.parent.mkdir()
     stale.write_bytes(b"x")
-    report.render(run, {}, None, False, tmp_path)
+    report.render({"demo": run}, {}, None, False, tmp_path)
     assert not stale.exists()
     assert sorted(p.name for p in tmp_path.iterdir()) == [report.PLOTS]
 

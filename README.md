@@ -70,4 +70,10 @@ file(GLOB_RECURSE MY_BENCH_SRCS CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/benchmar
 plumb_add_bench(my_plumb ${MY_BENCH_SRCS})
 ```
 
-Headers are included as `"plumb/plumb.hpp"`. `plumb_add_bench` makes one bench binary with plumb's `main`, and fails the build when two cases share a name. Tests build only when plumb is the top-level project.
+Headers are included as `"plumb/plumb.hpp"`. `plumb_add_bench` makes one bench binary with plumb's `main`, and fails the build when two cases share a name. It lists the binary in `plumb_benches.txt` in the build directory, unless `UNLISTED`. Tests build only when plumb is the top-level project.
+
+```bash
+pip install extern/plumb/tools        # once, gives the plumb command
+plumb report 'spsc_.*'                # build, run the matching cases, write BENCHMARKS.md
+plumb report 'spsc_.*' --base last    # the same, with an A/B section against the last run
+```

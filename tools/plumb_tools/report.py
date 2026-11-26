@@ -1,9 +1,7 @@
-"""Writes BENCHMARKS.md for one run: a header, a summary table, overview plots and per case details."""
+"""BENCHMARKS.md for a run: a header, a summary table, overview plots and per case details."""
 
 from __future__ import annotations
 
-import argparse
-import json
 import math
 import statistics
 from dataclasses import dataclass
@@ -11,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from plumb_tools import counts, plots
-from plumb_tools.results import Record, ResultsError, read_results
+from plumb_tools.results import Record
 
 # The figures a repetition records, and the ones the table shows.
 FIGURES = tuple(f for f, _ in plots.POINTS)
@@ -146,11 +144,12 @@ def decade_label(d: int) -> str:
     return "under 10 ns"
 
 
-def warnings(r: Record, summaries: list[Summary]) -> list[str]:
+def warnings(runs: dict[str, Record], summaries: list[Summary]) -> list[str]:
     out, moved = [], []
-    if not r.tsc_invariant:
-        out.append("The TSC is not invariant, figures may drift.")
-    for c in r.cases:
+    for label, r in runs.items():
+        if not r.tsc_invariant:
+            out.append(f"The TSC is not invariant in `{label}`, figures may drift.")
+    for c in (c for r in runs.values() for c in r.cases):
         if c.dropped:
             out.append(f"`{c.name}` dropped, void every time: {c.voids[-1] if c.voids else 'no reason'}.")
         elif c.voids:
@@ -177,17 +176,20 @@ def warnings(r: Record, summaries: list[Summary]) -> list[str]:
     return out
 
 
-def header(r: Record, env: dict, note: str | None, subtract: bool) -> list[str]:
+def header(runs: dict[str, Record], env: dict, note: str | None, subtract: bool) -> list[str]:
     lines = ["# Benchmarks", ""]
     if note:
         lines += [note, ""]
     for key, label in ENV_FIELDS:
         if env.get(key) is not None:
             lines.append(f"- {label}: `{env[key]}`")
-    start = datetime.fromtimestamp(r.start_ns / 1e9, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for label, r in runs.items():
+        start = datetime.fromtimestamp(r.start_ns / 1e9, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        lines.append(
+            f"- Run `{label}`: {start}, {r.rounds} rounds, seed {r.seed}, TSC {r.ghz:.3f} GHz"
+            + ("" if r.tsc_invariant else " not invariant")
+        )
     lines += [
-        f"- Run: {start}, {r.rounds} rounds, seed {r.seed}",
-        f"- TSC: {r.ghz:.3f} GHz, {'invariant' if r.tsc_invariant else 'not invariant'}",
         "- Figures: nanoseconds per op, the median across repetitions and their range"
         + (", the stamp cost subtracted" if subtract else ""),
         "",
@@ -217,18 +219,27 @@ def table(summaries: list[Summary], dropped: list[str]) -> list[str]:
     return lines + [""]
 
 
-def render(r: Record, env: dict, note: str | None, subtract: bool, out: Path) -> str:
-    """The report for `r`, its plots written to `out/PLOTS`."""
+def render(
+    runs: dict[str, Record],
+    env: dict,
+    note: str | None,
+    subtract: bool,
+    out: Path,
+    ab: list[str] | None = None,
+) -> str:
+    """The report for each bench's run in `runs`, by target, its plots written to `out/PLOTS`.
+    `ab` is an A/B section, put after the summary."""
     pictures = out / PLOTS
     pictures.mkdir(parents=True, exist_ok=True)
     for old in pictures.glob("*.png"):
         old.unlink()
-    by_name = {c.name: c for c in r.cases}
-    summaries = [s for c in r.cases if (s := summarise(c, subtract))]
-    dropped = [c.name for c in r.cases if not c.reps]
+    every = [c for r in runs.values() for c in r.cases]
+    by_name = {c.name: c for c in every}
+    summaries = [s for c in every if (s := summarise(c, subtract))]
+    dropped = [c.name for c in every if not c.reps]
 
-    lines = header(r, env, note, subtract)
-    if found := warnings(r, summaries):
+    lines = header(runs, env, note, subtract)
+    if found := warnings(runs, summaries):
         lines += ["## Warnings", ""] + [f"- {w}" for w in found] + [""]
     lines += ["## Summary", ""] + table(summaries, dropped)
     lines += [
@@ -238,6 +249,7 @@ def render(r: Record, env: dict, note: str | None, subtract: bool, out: Path) ->
         "Stamp is the stamp cost's share of a batch at p50.",
         "",
     ]
+    lines += ab or []
 
     if summaries:
         lines += [
@@ -266,12 +278,12 @@ def render(r: Record, env: dict, note: str | None, subtract: bool, out: Path) ->
                 "",
             ]
             if s.counts:
-                r = s.counts.rates
+                rates = s.counts.rates
                 counted = f"case_{s.name}_counts.png"
                 plots.counts(by_name[s.name], s.offsets, subtract, pictures / counted)
                 lines += [
-                    f"{r.instructions:,.1f} instructions per op, {r.cpi:.2f} cycles per "
-                    f"instruction, held at {r.held:.2f} of the reference clock"
+                    f"{rates.instructions:,.1f} instructions per op, {rates.cpi:.2f} cycles per "
+                    f"instruction, held at {rates.held:.2f} of the reference clock"
                     + (", the empty batch's counts subtracted" if subtract else "")
                     + ". A line per repetition through its batches by rank, between each pair of figures.",
                     "",
@@ -283,41 +295,3 @@ def render(r: Record, env: dict, note: str | None, subtract: bool, out: Path) ->
                 "",
             ]
     return "\n".join(lines)
-
-
-def read_env(path: Path | None) -> dict:
-    """The environment file's fields, none without a file."""
-    if path is None:
-        return {}
-    try:
-        env = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as e:
-        raise ResultsError(f"cannot read {path}: {e}") from e
-    if not isinstance(env, dict):
-        raise ResultsError(f"{path}: not a JSON object")
-    return env
-
-
-def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="plumb_tools.report", description=__doc__)
-    p.add_argument("run", type=Path, help="the run directory, holding results.bin")
-    p.add_argument("--env", type=Path, help="the environment file, JSON")
-    p.add_argument("--note", help="text under the title")
-    p.add_argument("--out", type=Path, help="where BENCHMARKS.md goes, the run directory by default")
-    p.add_argument("--subtract-stamp", action="store_true", help="subtract each repetition's stamp cost")
-    a = p.parse_args(argv)
-    out = a.out or a.run
-    try:
-        r = read_results(a.run / "results.bin")
-        env = read_env(a.env)
-    except ResultsError as e:
-        print(f"report: {e}")
-        return 1
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "BENCHMARKS.md").write_text(render(r, env, a.note, a.subtract_stamp, out))
-    print(f"report: wrote {out / 'BENCHMARKS.md'}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

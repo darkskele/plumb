@@ -13,8 +13,12 @@ function(plumb_build_test name target regex)
     set_tests_properties(${name} PROPERTIES PASS_REGULAR_EXPRESSION "${regex}" RESOURCE_LOCK plumb_build_dir)
 endfunction()
 
+# The bench list holds the demo, not the tests' benches.
+add_test(NAME plumb_add_bench_lists_benches COMMAND cat ${CMAKE_BINARY_DIR}/plumb_benches.txt)
+set_tests_properties(plumb_add_bench_lists_benches PROPERTIES PASS_REGULAR_EXPRESSION "^plumb_demo\t[^\n]*/plumb_demo\n$")
+
 # Cases in two files, each with its own fixture named Push, list together.
-plumb_add_bench(plumb_selftest selftest/bench_a.cpp selftest/bench_b.cpp)
+plumb_add_bench(plumb_selftest UNLISTED selftest/bench_a.cpp selftest/bench_b.cpp)
 add_test(NAME plumb_selftest_lists_every_case COMMAND plumb_selftest --list)
 set_tests_properties(plumb_selftest_lists_every_case PROPERTIES PASS_REGULAR_EXPRESSION "^selftest_a\nselftest_b\nselftest_m\n$")
 
@@ -31,7 +35,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 
 # Cases that crash or abandon are void and rerun, and a case void three times is dropped.
-plumb_add_bench(plumb_selftest_void selftest_void/bench.cpp)
+plumb_add_bench(plumb_selftest_void UNLISTED selftest_void/bench.cpp)
 add_test(NAME plumb_selftest_voids_and_reruns
     COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/selftest_void/check.sh $<TARGET_FILE:plumb_selftest_void> ${CMAKE_CURRENT_BINARY_DIR}/selftest_void)
 

@@ -5,9 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "plumb-tools"
 version = "0.1.0"
-description = "Reads plumb's results and reports on them."
+description = "Builds and runs plumb benches and reports on them."
 requires-python = ">=3.15"
 dependencies = ["numpy>=2.5.5", "matplotlib>=3.11.2"]
+
+[project.scripts]
+plumb = "plumb_tools.cli:main"
 
 [tool.setuptools]
 packages = ["plumb_tools"]
