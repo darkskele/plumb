@@ -19,6 +19,8 @@ struct Figures {
     double p50;
     double p90;
     double p99;
+    double p99_9;
+    double p99_99;
     double max;
 
     bool operator==(const Figures&) const = default;
@@ -90,11 +92,13 @@ inline Repetition fold(const Raw& raw, std::size_t round) pre(!raw.ns.empty()) p
     }
 
     std::ranges::sort(per_op);
-    rep.figures = {.min = per_op.front(),
-                   .p50 = percentile(per_op, 0.50),
-                   .p90 = percentile(per_op, 0.90),
-                   .p99 = percentile(per_op, 0.99),
-                   .max = per_op.back()};
+    rep.figures = {.min    = per_op.front(),
+                   .p50    = percentile(per_op, 0.50),
+                   .p90    = percentile(per_op, 0.90),
+                   .p99    = percentile(per_op, 0.99),
+                   .p99_9  = percentile(per_op, 0.999),
+                   .p99_99 = percentile(per_op, 0.9999),
+                   .max    = per_op.back()};
     return rep;
 }
 

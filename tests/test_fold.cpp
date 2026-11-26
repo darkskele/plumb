@@ -29,9 +29,15 @@ plumb::Raw rising(std::size_t n, std::size_t count) {
 }  // namespace
 
 TEST(Fold, FiguresAreExactPerOp) {
-    auto rep = plumb::fold(rising(2, 100), 3);
+    auto rep = plumb::fold(rising(2, 10'000), 3);
     EXPECT_EQ(rep.round, 3u);
-    EXPECT_EQ(rep.figures, (plumb::Figures{.min = 1, .p50 = 50, .p90 = 90, .p99 = 99, .max = 100}));
+    EXPECT_EQ(rep.figures, (plumb::Figures{.min    = 1,
+                                           .p50    = 5'000,
+                                           .p90    = 9'000,
+                                           .p99    = 9'900,
+                                           .p99_9  = 9'990,
+                                           .p99_99 = 9'999,
+                                           .max    = 10'000}));
 }
 
 TEST(Fold, HistogramCountsPerOpPicoseconds) {

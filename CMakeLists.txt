@@ -46,6 +46,8 @@ if(NOT PROJECT_IS_TOP_LEVEL)
     return()
 endif()
 
+add_subdirectory(demo)
+
 include(CTest)                                  # BUILD_TESTING, default ON
 
 if(BUILD_TESTING)

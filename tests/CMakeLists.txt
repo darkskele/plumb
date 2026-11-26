@@ -3,6 +3,7 @@ file(GLOB_RECURSE PLUMB_TEST_SRCS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/
 add_executable(plumb_tests ${PLUMB_TEST_SRCS})
 target_compile_options(plumb_tests PRIVATE -Wall -Wextra)
 target_link_libraries(plumb_tests PRIVATE plumb::plumb GTest::gtest GTest::gtest_main)
+target_compile_definitions(plumb_tests PRIVATE PLUMB_GOLDEN_RESULTS="${PROJECT_SOURCE_DIR}/tools/tests/data/results.bin")
 add_test(NAME plumb_tests COMMAND plumb_tests)
 
 # Builds a target as a test. Passes when the build output matches the regex, so a build that fails for another reason fails the test.
