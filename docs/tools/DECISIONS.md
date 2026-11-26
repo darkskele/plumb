@@ -11,3 +11,6 @@
 9. Hardware counts are shown per band of a repetition's batches ranked fastest first, cut at its figures. A bucket across a cut gives each side its counts in proportion to its batches on that side, so every band holds exactly its share.
 10. Stall is the cycles per instruction of the slowest 1% of batches over that of the fastest half, the median across repetitions. Over 1.5× is flagged.
 11. `--subtract-stamp` also takes the empty batch's counts off each batch, the same harness cost.
+12. A/B changes need three things together. Every repetition of one run past every repetition of the other, a change of at least 1 ns and 2% of the base, and over twice the wider range of repetitions. Each limit alone flags small cases.
+13. Runs whose environments differ are compared anyway, the differences listed.
+14. Instructions per op and cycles per instruction are compared like the times, with no nanosecond limit.

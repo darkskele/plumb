@@ -69,7 +69,7 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~Stamp share per case, and each repetition's stamp cost plotted. Subtraction an option, off by default.~~
     - [x] ~~`--note TEXT` under the title.~~
     - [x] ~~A demo bench of cases across the decades, its report plumb's own `BENCHMARKS.md`, checked on the box.~~
-    - [ ] A/B from the spread of each run's repetitions, from halln's `diff.py`. Environment differences listed, never refused.
+    - [x] ~~A/B from the spread of each run's repetitions, from halln's `diff.py`. A change needs separate repetitions, at least 1 ns and 2%, and over twice the wider range. Environment differences listed, never refused.~~
     - [x] ~~Hardware counts per case. Instructions per op, cycles per instruction and held frequency, a line per repetition through bands of its batches by rank, between its figures. The empty batch's counts subtracted with the stamp cost.~~
     - [x] ~~Cases whose slow buckets stalled, more cycles per instruction than their fast ones, flagged. The slowest 1% of batches over the fastest half, over 1.5×, and whether the tail also ran more instructions.~~
     - [ ] Profile a case: `perf record` over a run of it, samples kept only in its `run_batch`, split per instruction into op, loop and stamps, and per repetition by process.
