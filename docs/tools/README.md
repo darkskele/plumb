@@ -12,6 +12,7 @@ environment file ─────────────┘
 
 - `results` reads a results file by the schema it carries. Each struct becomes a record, its fields named as the C++ members are.
 - `report` summarises each case across its repetitions and writes `BENCHMARKS.md`, its plots in `benchmarks/` beside it.
+- `counts` turns each repetition's counted latency buckets into rates, per band of its batches by rank.
 - `plots` draws the overview and per case plots.
 
 ## Report
@@ -20,7 +21,7 @@ environment file ─────────────┘
 
 - `RUN_DIR` holds `results.bin`.
 - `--out` is where `BENCHMARKS.md` goes, the run directory by default.
-- `--subtract-stamp` takes each repetition's stamp cost per op from its figures.
+- `--subtract-stamp` takes each repetition's stamp cost per op from its figures, and its empty batch's counts from its counts.
 
 ## Environment file
 

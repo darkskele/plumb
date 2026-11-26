@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from plumb_tools import plots
+from plumb_tools import counts, plots
 from plumb_tools.results import Record, ResultsError, read_results
 
 # The figures a repetition records, and the ones the table shows.
@@ -22,6 +22,9 @@ SPREAD_LIMIT = 0.05
 DRIFT_LIMIT = 0.05
 # The most cases one overview plot shows.
 PER_PLOT = 8
+# A case whose p99 tail took more than this many times the cycles per instruction of its p50 half
+# is flagged as stalled.
+STALL_LIMIT = 1.5
 # The folder beside BENCHMARKS.md that holds only its plots, emptied of PNGs each time.
 PLOTS = "benchmarks"
 # The environment file's fields the header shows, each optional.
@@ -51,6 +54,7 @@ class Summary:
     reps: int
     voids: int
     offsets: list[float]
+    counts: counts.Summary | None
 
 
 def stamp_per_op(rep: Record) -> float:
@@ -79,7 +83,15 @@ def summarise(case: Record, subtract: bool) -> Summary | None:
         for w in r.windows
     )
     return Summary(
-        case.name, figures, spread, drift, share, len(case.reps), len(case.voids), offsets
+        case.name,
+        figures,
+        spread,
+        drift,
+        share,
+        len(case.reps),
+        len(case.voids),
+        offsets,
+        counts.summarise(case.reps, subtract),
     )
 
 
@@ -150,6 +162,16 @@ def warnings(r: Record, summaries: list[Summary]) -> list[str]:
     for s in summaries:
         if s.spread > SPREAD_LIMIT:
             out.append(f"`{s.name}` p50 spread {pct(s.spread)} across repetitions, over {pct(SPREAD_LIMIT)}.")
+        if s.counts and s.counts.stall > STALL_LIMIT:
+            work = (
+                f", and ran {s.counts.work:.2f}× the instructions per op"
+                if s.counts.work > STALL_LIMIT
+                else ""
+            )
+            out.append(
+                f"`{s.name}` stalled. Its slowest 1% of batches took {s.counts.stall:.2f}× the "
+                f"cycles per instruction of its fastest half{work}."
+            )
         if s.drift > DRIFT_LIMIT:
             out.append(f"`{s.name}` drifted {pct(s.drift)} within a repetition, over {pct(DRIFT_LIMIT)}.")
     return out
@@ -175,18 +197,23 @@ def header(r: Record, env: dict, note: str | None, subtract: bool) -> list[str]:
 
 def table(summaries: list[Summary], dropped: list[str]) -> list[str]:
     lines = [
-        "| Case | p50 | p90 | p99 | Spread | Drift | Stamp | Reps | Voids |",
-        "|---|--:|--:|--:|--:|--:|--:|--:|--:|",
+        "| Case | p50 | p90 | p99 | Spread | Drift | Stall | Stamp | Reps | Voids |",
+        "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|",
     ]
     for s in by_p50(summaries):
         cells = [f"{ns(f.median)} ({ns(f.min)} to {ns(f.max)})" for f in (s.figures[k] for k in TABLE)]
         spread = flagged(s.spread, SPREAD_LIMIT)
         drift = flagged(s.drift, DRIFT_LIMIT)
+        stall = "n/a"
+        if s.counts and math.isfinite(s.counts.stall):
+            stall = f"{s.counts.stall:.2f}×"
+            if s.counts.stall > STALL_LIMIT:
+                stall = f"**{stall}**"
         lines.append(
-            f"| `{s.name}` | {' | '.join(cells)} | {spread} | {drift} | {pct(s.stamp_share)} | {s.reps} | {s.voids} |"
+            f"| `{s.name}` | {' | '.join(cells)} | {spread} | {drift} | {stall} | {pct(s.stamp_share)} | {s.reps} | {s.voids} |"
         )
     for name in sorted(dropped):
-        lines.append(f"| `{name}` | dropped | | | | | | 0 | |")
+        lines.append(f"| `{name}` | dropped | | | | | | | 0 | |")
     return lines + [""]
 
 
@@ -207,6 +234,7 @@ def render(r: Record, env: dict, note: str | None, subtract: bool, out: Path) ->
     lines += [
         "Spread is the range of the repetition p50s over their median. "
         "Drift is the furthest a tenth of a repetition's p50 sits from the whole repetition's. "
+        "Stall is the cycles per instruction of the slowest 1% of batches over that of the fastest half. "
         "Stamp is the stamp cost's share of a batch at p50.",
         "",
     ]
@@ -236,6 +264,21 @@ def render(r: Record, env: dict, note: str | None, subtract: bool, out: Path) ->
                 "",
                 f"![{s.name}]({PLOTS}/{name})",
                 "",
+            ]
+            if s.counts:
+                r = s.counts.rates
+                counted = f"case_{s.name}_counts.png"
+                plots.counts(by_name[s.name], s.offsets, subtract, pictures / counted)
+                lines += [
+                    f"{r.instructions:,.1f} instructions per op, {r.cpi:.2f} cycles per "
+                    f"instruction, held at {r.held:.2f} of the reference clock"
+                    + (", the empty batch's counts subtracted" if subtract else "")
+                    + ". A line per repetition through its batches by rank, between each pair of figures.",
+                    "",
+                    f"![{s.name} counts]({PLOTS}/{counted})",
+                    "",
+                ]
+            lines += [
                 "</details>",
                 "",
             ]

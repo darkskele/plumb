@@ -70,7 +70,8 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~`--note TEXT` under the title.~~
     - [x] ~~A demo bench of cases across the decades, its report plumb's own `BENCHMARKS.md`, checked on the box.~~
     - [ ] A/B from the spread of each run's repetitions, from halln's `diff.py`. Environment differences listed, never refused.
-    - [ ] Cases whose slow buckets stalled, more cycles per instruction than their fast ones, flagged.
+    - [x] ~~Hardware counts per case. Instructions per op, cycles per instruction and held frequency, a line per repetition through bands of its batches by rank, between its figures. The empty batch's counts subtracted with the stamp cost.~~
+    - [x] ~~Cases whose slow buckets stalled, more cycles per instruction than their fast ones, flagged. The slowest 1% of batches over the fastest half, over 1.5×, and whether the tail also ran more instructions.~~
     - [ ] Profile a case: `perf record` over a run of it, samples kept only in its `run_batch`, split per instruction into op, loop and stamps, and per repetition by process.
 - [ ] 11. cds, the first consumer. Done when every cds bench has a plumb case and its results sit beside the gbench figures they replace.
     - [ ] plumb as `extern/plumb` in cds. `benchmarks/**/bench_*.cpp` globbed into `cds_plumb`.

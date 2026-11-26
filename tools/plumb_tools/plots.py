@@ -11,6 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.ticker import FuncFormatter, NullFormatter  # noqa: E402
 
+from plumb_tools import counts as counting  # noqa: E402
 from plumb_tools.results import Record  # noqa: E402
 
 SURFACE = "#fcfcfb"
@@ -154,5 +155,31 @@ def case(c: Record, offsets: list[float], show_drift: bool, path: Path) -> None:
     for ax in axes:
         _plain(ax)
     fig.suptitle(c.name, color=INK, fontsize=11)
+    fig.tight_layout()
+    _save(fig, path)
+
+
+def counts(c: Record, offsets: list[float], subtract: bool, path: Path) -> None:
+    """A line per repetition through the bands of its batches by rank: instructions per op,
+    cycles per instruction, and cycles over reference cycles."""
+    fig, axes = plt.subplots(1, 3, figsize=(12.6, 3.4))
+    panels = (
+        ("instructions", "Instructions per op"),
+        ("cpi", "Cycles per instruction"),
+        ("held", "Cycles over reference cycles"),
+    )
+    xs = range(len(counting.BANDS))
+    for rep in c.reps:
+        rows = counting.bands(counting.buckets(rep, subtract))
+        for ax, (field, _) in zip(axes, panels):
+            ax.plot(xs, [getattr(r, field) for r in rows], color=SERIES[0], alpha=0.55,
+                    linewidth=2, marker="o", markersize=4)
+    for ax, (_, title) in zip(axes, panels):
+        ax.set_xticks(list(xs), [label for *_, label in counting.BANDS], rotation=30,
+                      ha="right")
+        ax.set_ylim(0, ax.get_ylim()[1] * 1.1)
+        ax.grid(axis="x", visible=False)
+        ax.set_title(title)
+        _plain(ax)
     fig.tight_layout()
     _save(fig, path)

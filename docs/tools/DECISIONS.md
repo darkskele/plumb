@@ -8,3 +8,6 @@
 6. Overview plots group cases by the decade of their p50, at most 8 a plot. A line per case through p50, p90 and p99, each point the median with a bar from the lowest repetition to the highest.
 7. Drift is the furthest a tenth of a repetition's p50 sits from the whole repetition's. Over 5% is flagged and plotted.
 8. Plots are PNG on a light background. A colour per case in fixed order. Repetitions share one colour, since their order means nothing.
+9. Hardware counts are shown per band of a repetition's batches ranked fastest first, cut at its figures. A bucket across a cut gives each side its counts in proportion to its batches on that side, so every band holds exactly its share.
+10. Stall is the cycles per instruction of the slowest 1% of batches over that of the fastest half, the median across repetitions. Over 1.5× is flagged.
+11. `--subtract-stamp` also takes the empty batch's counts off each batch, the same harness cost.

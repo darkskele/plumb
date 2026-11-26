@@ -55,7 +55,7 @@ def test_a_case_without_repetitions_has_no_summary(run):
 
 def test_cases_group_by_decade_of_p50_at_most_eight_each():
     def at(name, p50):
-        return report.Summary(name, {"p50": report.Range(p50, p50, p50)}, 0, 0, 0, 1, 0, [0])
+        return report.Summary(name, {"p50": report.Range(p50, p50, p50)}, 0, 0, 0, 1, 0, [0], None)
 
     cases = [at(f"a{i}", 2.0 + i) for i in range(9)] + [at("b", 40), at("c", 0.5), at("d", 2e6)]
     got = [(d, [s.name for s in g]) for d, g in report.groups(cases)]
@@ -92,7 +92,7 @@ def test_the_report_names_the_commit_the_note_and_every_case(run, tmp_path):
     assert "- Commit: `abc1234-dirty`" in lines
     assert "- Machine: `LATITUDE`" in lines
     assert any(l.startswith("| `push` |") for l in lines)
-    assert "| `crash` | dropped | | | | | | 0 | |" in lines
+    assert "| `crash` | dropped | | | | | | | 0 | |" in lines
 
 
 def test_the_report_warns_of_voids_drops_moves_and_spread(run, tmp_path):
@@ -106,7 +106,7 @@ def test_the_report_warns_of_voids_drops_moves_and_spread(run, tmp_path):
 
 def test_the_report_writes_its_plots(run, tmp_path):
     md = report.render(run, {}, None, False, tmp_path)
-    for name in ("overview_0.png", "case_push.png"):
+    for name in ("overview_0.png", "case_push.png", "case_push_counts.png"):
         assert (tmp_path / "benchmarks" / name).stat().st_size > 0
         assert f"(benchmarks/{name})" in md
 
