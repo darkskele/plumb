@@ -72,7 +72,14 @@ Each step ends with something that builds and runs on WSL and on the box. The re
     - [x] ~~A/B from the spread of each run's repetitions, from halln's `diff.py`. A change needs separate repetitions, at least 1 ns and 2%, and over twice the wider range. Environment differences listed, never refused.~~
     - [x] ~~Hardware counts per case. Instructions per op, cycles per instruction and held frequency, a line per repetition through bands of its batches by rank, between its figures. The empty batch's counts subtracted with the stamp cost.~~
     - [x] ~~Cases whose slow buckets stalled, more cycles per instruction than their fast ones, flagged. The slowest 1% of batches over the fastest half, over 1.5×, and whether the tail also ran more instructions.~~
-    - [ ] Profile a case: `perf record` over a run of it, samples kept only in its `run_batch`, split per instruction into op, loop and stamps, and per repetition by process.
+    - [x] ~~`plumb`, one command from the tools package, on any Linux machine with a CMake project. It configures and builds the benches, runs the cases whose whole name a pattern matches, and analyses them.~~
+        - [x] ~~`plumb_add_bench` lists each bench target and its binary in the build directory. Benches of plumb's own tests are left out.~~
+        - [x] ~~The build directory from a preset in `CMakePresets.json`, or given. Configured when missing, built every time unless told not to.~~
+        - [x] ~~`plumb report [PATTERN]` runs the cases and writes `BENCHMARKS.md`. Every bench binary's run in one report. The commit read from git.~~
+        - [x] ~~`--base RUN` adds an A/B section to `BENCHMARKS.md`, replacing the separate diff command.~~
+        - [x] ~~`--wrap CMD` prefixes each run of a bench binary.~~
+        - [x] ~~A `pyproject.toml` that `pip install` alone sets up.~~
+    - [ ] `plumb perf [PATTERN]`: each case in turn, `perf record` over one run of it in process, printed to the terminal. Samples kept only in its op, inlined or called from it. Events per thousand instructions and per op, a default set and an override. Hot lines of the op and its hottest instructions, beside the last profile of the case.
 - [ ] 11. cds, the first consumer. Done when every cds bench has a plumb case and its results sit beside the gbench figures they replace.
     - [ ] plumb as `extern/plumb` in cds. `benchmarks/**/bench_*.cpp` globbed into `cds_plumb`.
     - [ ] Port the latency harness and the gbench queue benches as cases.

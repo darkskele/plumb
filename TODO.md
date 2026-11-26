@@ -8,7 +8,7 @@ Open milestones from every `docs/` README and every `@todo` in the code, by fold
     - [ ] halln `feature/rigStability` lands as it is. Its `diff.py` and `noise.py` are the reference for step 10.
     - [ ] cds `feature/benchInfra` does not land its `benchmarks/support` headers (`tsc.hpp`, `histogram.hpp`, `build_info.hpp`) or the latency harness in cds. They seed plumb in steps 3 and 7. Its `pin.hpp` stays in cds for fixtures that start threads. Its `tools/bench` changes may land, they are retired in step 13.
 - [ ] 10. Analysis. Done when a deliberate slowdown in a cds case is reported as a change and two runs of one build are not.
-    - [ ] Profile a case: `perf record` over a run of it, samples kept only in its `run_batch`, split per instruction into op, loop and stamps, and per repetition by process.
+    - [ ] `plumb perf [PATTERN]`: each case in turn, `perf record` over one run of it in process, printed to the terminal. Samples kept only in its op, inlined or called from it. Events per thousand instructions and per op, a default set and an override. Hot lines of the op and its hottest instructions, beside the last profile of the case.
 - [ ] 11. cds, the first consumer. Done when every cds bench has a plumb case and its results sit beside the gbench figures they replace.
     - [ ] plumb as `extern/plumb` in cds. `benchmarks/**/bench_*.cpp` globbed into `cds_plumb`.
     - [ ] Port the latency harness and the gbench queue benches as cases.

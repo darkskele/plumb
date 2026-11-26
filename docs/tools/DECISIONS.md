@@ -1,6 +1,6 @@
 # tools decisions
 
-1. Python analyses. It never records or rebuilds a measurement, it reads what the C++ wrote.
+1. Python builds and runs the bench binaries and analyses what they wrote. It never records or rebuilds a measurement itself.
 2. A results file is read by the schema it carries, so no struct is defined twice.
 3. A figure for a case is the median across its repetitions, shown with their range. Repetitions are never merged.
 4. Spread is the range of the repetition p50s over their median. A case over 5% is flagged.
@@ -12,5 +12,9 @@
 10. Stall is the cycles per instruction of the slowest 1% of batches over that of the fastest half, the median across repetitions. Over 1.5× is flagged.
 11. `--subtract-stamp` also takes the empty batch's counts off each batch, the same harness cost.
 12. A/B changes need three things together. Every repetition of one run past every repetition of the other, a change of at least 1 ns and 2% of the base, and over twice the wider range of repetitions. Each limit alone flags small cases.
-13. Runs whose environments differ are compared anyway, the differences listed.
+13. Runs whose environments differ are compared anyway, the documented fields that differ listed.
 14. Instructions per op and cycles per instruction are compared like the times, with no nanosecond limit.
+15. One command builds, runs and reports, so neither a user nor a task has to script the steps.
+16. The bench binaries come from a list the build directory holds, so the tools know no target by name.
+17. A/B is a section of the report, not a command of its own.
+18. A run is a folder of each bench binary's results, made in the build directory and never committed.
