@@ -1,6 +1,6 @@
 # tools
 
-`plumb`, a command that builds a CMake project's benches, runs the cases a pattern matches, and reports on them. Linux only. `pip install tools/` sets it up, or `tools/setup.sh` builds the `plumb` environment with it.
+`plumb`, a command that builds a CMake project's benches, runs the cases a pattern matches, and reports on or profiles them. Linux on Intel only. `pip install tools/` sets it up, or `tools/setup.sh` builds the `plumb` environment with it.
 
 ```
 CMakePresets.json ──► project ──► bench binaries ──► a run, results.bin per binary
@@ -8,6 +8,10 @@ CMakePresets.json ──► project ──► bench binaries ──► a run, re
 environment file, git ───────────────────────────────────┤
                                                          ▼
                       base run ──► diff ──► report ──► BENCHMARKS.md, benchmarks/*.png
+
+bench binary ──► perf record, one case in process ──► perf ──► the terminal
+                                                       ▲
+                                         its last profile
 ```
 
 ## Components
@@ -19,6 +23,7 @@ environment file, git ───────────────────�
 - `counts` turns each repetition's counted latency buckets into rates, per band of its batches by rank.
 - `plots` draws the overview and per case plots.
 - `diff` compares a run with a base run, case by case of equal name, and writes the report's A/B section.
+- `perf` profiles one case's op and prints it.
 
 ## Report
 
@@ -41,6 +46,21 @@ Run from the project's source directory.
 - Compares p50, p90 and p99, instructions per op and cycles per instruction.
 - A figure changed when every repetition of one run is past every repetition of the other, and the medians differ by at least `--min-ns` for a time, `--min-pct` of the base, and `--spread` times the wider range of repetitions.
 - Environment fields that differ are listed above the changes.
+
+## Perf
+
+`plumb perf [PATTERN] [--preset NAME | --build DIR] [--no-build] [--wrap CMD] [--events LIST] [--frequency HZ]`
+
+Each matching case in turn, one after another.
+
+- `perf record` with LBR call stacks over `--run NAME --in-process`, a single repetition after sizing.
+- Only the op's samples are kept. An instruction of the case's `run_batch` is the op's when its inline chain reaches a project file, one under the source directory and not a plumb header. A sample counts when its instruction is the op's, or when it was called from a call in the op.
+- `--events` is a comma separated list of perf events. By default cycles, instructions, cache misses, branch misses and dTLB load misses.
+- Each event is shown per op and per thousand instructions. Per op comes from plumb's own instructions per op.
+- The op's lines and its hottest instructions by share of its cycles, and the functions it called, the kernel among them.
+- Each case's profile is kept in `<build>/plumb_perf/` and shown as the previous beside the next, each event's change coloured past 2%.
+- In colour on a terminal unless `NO_COLOR` is set.
+- Needs `perf`, `objdump`, `addr2line` and `c++filt`, and `perf_event_paranoid` at most 1. Kernel functions show as one `[kernel]` unless `kptr_restrict` is 0.
 
 ## Environment
 
