@@ -1,4 +1,5 @@
-"""plumb: builds a CMake project's benches, runs the cases a pattern matches, and reports on them."""
+"""plumb: builds a CMake project's benches, runs the cases a pattern matches, and reports on or
+profiles them."""
 
 from __future__ import annotations
 
@@ -6,14 +7,17 @@ import argparse
 import json
 import re
 import shlex
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from plumb_tools import diff, project, report
+from plumb_tools import diff, perf, project, report
 from plumb_tools.results import Record, ResultsError
 
 # Where each run goes in the build directory, a folder per run named by its start.
 RUNS = "plumb_runs"
+# Where each case's last profile is kept in the build directory.
+PROFILES = "plumb_perf"
 
 def _build_dir(a: argparse.Namespace, source: Path) -> Path:
     """The build directory, configured and built unless told not to."""
@@ -89,6 +93,19 @@ def report_command(a: argparse.Namespace) -> None:
     print(f"plumb: wrote {out / 'BENCHMARKS.md'}")
 
 
+def perf_command(a: argparse.Namespace) -> None:
+    source = Path.cwd()
+    build = _build_dir(a, source)
+    events = a.events.split(",") if a.events else list(perf.EVENTS)
+    found = [(b, names) for b in project.benches(build) if (names := project.cases(b, a.pattern))]
+    if not found:
+        raise ResultsError(f"no case matches {a.pattern}")
+    for b, names in found:
+        for name in names:
+            print(perf.profile(b, name, events, a.frequency, source, build / PROFILES,
+                               shlex.split(a.wrap or ""), perf.wants_colour(sys.stdout)), flush=True)
+
+
 def _read_env(run_dir: Path) -> dict:
     path = run_dir / "env.json"
     return json.loads(path.read_text()) if path.exists() else {}
@@ -96,28 +113,36 @@ def _read_env(run_dir: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="plumb", description=__doc__)
-    sub = p.add_subparsers(dest="command", required=True)
+    sub = p.add_subparsers(required=True)
 
-    r = sub.add_parser("report", help="run the cases and write BENCHMARKS.md")
-    r.add_argument("pattern", nargs="?", default=".*", help="a regex the whole case name matches")
-    where = r.add_mutually_exclusive_group()
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("pattern", nargs="?", default=".*", help="a regex the whole case name matches")
+    where = common.add_mutually_exclusive_group()
     where.add_argument("--preset", default="release", help="the configure preset, release by default")
     where.add_argument("--build", type=Path, help="the build directory, in place of a preset")
-    r.add_argument("--no-build", action="store_true", help="run what is already built")
+    common.add_argument("--no-build", action="store_true", help="run what is already built")
+    common.add_argument("--wrap", help="a command each bench binary runs under")
+
+    r = sub.add_parser("report", parents=[common], help="run the cases and write BENCHMARKS.md")
     r.add_argument("--from", dest="source_run", type=Path, help="report on this run, or the newest for last, running nothing")
     r.add_argument("--base", type=Path, help="a run to compare with, or the newest for last, in an A/B section")
     r.add_argument("--out", type=Path, help="where BENCHMARKS.md goes, here by default")
     r.add_argument("--note", help="text under the title")
     r.add_argument("--env", type=Path, help="an environment file, JSON, its fields over git's")
-    r.add_argument("--wrap", help="a command each bench binary runs under")
     r.add_argument("--subtract-stamp", action="store_true", help="subtract each repetition's stamp cost")
     r.add_argument("--min-ns", type=float, default=1.0, help="the least A/B change in a time, ns")
     r.add_argument("--min-pct", type=float, default=2.0, help="the least A/B change, percent")
     r.add_argument("--spread", type=float, default=2.0, help="the least A/B change, times the wider range")
+    r.set_defaults(command=report_command)
+
+    f = sub.add_parser("perf", parents=[common], help="profile each case's op, one at a time")
+    f.add_argument("--events", help=f"perf events, comma separated, {','.join(perf.EVENTS)} by default")
+    f.add_argument("--frequency", type=int, default=perf.FREQUENCY, help="samples a second for each event")
+    f.set_defaults(command=perf_command)
 
     a = p.parse_args(argv)
     try:
-        report_command(a)
+        a.command(a)
     except ResultsError as e:
         print(f"plumb: {e}")
         return 1

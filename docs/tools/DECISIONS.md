@@ -18,3 +18,8 @@
 16. The bench binaries come from a list the build directory holds, so the tools know no target by name.
 17. A/B is a section of the report, not a command of its own.
 18. A run is a folder of each bench binary's results, made in the build directory and never committed.
+19. A profile is one case run once in process, so it takes as long as one repetition and no longer.
+20. Call stacks come from LBR. DWARF stacks copy too much to stay fast, and frame pointers would change the timed code.
+21. The op is found from the line table, not inline frames, which the compiler drops for the op's own lines.
+22. Event counts are kept only for the op's samples. Counting the whole process would count the fixture and the harness.
+23. A profile prints to the terminal only. It is for iterating and is never committed.

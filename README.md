@@ -76,4 +76,5 @@ Headers are included as `"plumb/plumb.hpp"`. `plumb_add_bench` makes one bench b
 pip install extern/plumb/tools        # once, gives the plumb command
 plumb report 'spsc_.*'                # build, run the matching cases, write BENCHMARKS.md
 plumb report 'spsc_.*' --base last    # the same, with an A/B section against the last run
+plumb perf spsc_push_int_1024         # profile one case's op, printed to the terminal
 ```

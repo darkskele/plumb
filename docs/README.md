@@ -79,7 +79,7 @@ Each step ends with something that builds and runs on WSL and on the box. The re
         - [x] ~~`--base RUN` adds an A/B section to `BENCHMARKS.md`, replacing the separate diff command.~~
         - [x] ~~`--wrap CMD` prefixes each run of a bench binary.~~
         - [x] ~~A `pyproject.toml` that `pip install` alone sets up.~~
-    - [ ] `plumb perf [PATTERN]`: each case in turn, `perf record` over one run of it in process, printed to the terminal. Samples kept only in its op, inlined or called from it. Events per thousand instructions and per op, a default set and an override. Hot lines of the op and its hottest instructions, beside the last profile of the case.
+    - [x] ~~`plumb perf [PATTERN]`: each case in turn, `perf record` over one run of it in process, printed to the terminal. Samples kept only in its op, inlined or called from it. Events per thousand instructions and per op, a default set and an override. Hot lines of the op and its hottest instructions, beside the last profile of the case.~~
 - [ ] 11. cds, the first consumer. Done when every cds bench has a plumb case and its results sit beside the gbench figures they replace.
     - [ ] plumb as `extern/plumb` in cds. `benchmarks/**/bench_*.cpp` globbed into `cds_plumb`.
     - [ ] Port the latency harness and the gbench queue benches as cases.
